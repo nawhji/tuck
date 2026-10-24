@@ -1,0 +1,371 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A000000000000000000000C8 /* TuckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000064 /* TuckApp.swift */; };
+		A000000000000000000000C9 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000065 /* ScanView.swift */; };
+		A000000000000000000000CA /* RoomScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000066 /* RoomScanner.swift */; };
+		A000000000000000000000CB /* RoomCaptureContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000067 /* RoomCaptureContainer.swift */; };
+		A000000000000000000000CC /* RoomDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000068 /* RoomDocument.swift */; };
+		A000000000000000000000CD /* RoomExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000069 /* RoomExporter.swift */; };
+		A000000000000000000000CE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000076 /* Assets.xcassets */; };
+		A000000000000000000000E1 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E0 /* SplashView.swift */; };
+		B10000000000000000000000 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000000 /* HomeView.swift */; };
+		B10000000000000000000001 /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001 /* HomeViewModel.swift */; };
+		B10000000000000000000002 /* HomeHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002 /* HomeHeader.swift */; };
+		B10000000000000000000003 /* RoomStageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003 /* RoomStageView.swift */; };
+		B10000000000000000000004 /* ChatSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* ChatSheet.swift */; };
+		B10000000000000000000005 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ChatInputBar.swift */; };
+		B10000000000000000000006 /* ChatBubbles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* ChatBubbles.swift */; };
+		B10000000000000000000007 /* ProductCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* ProductCardView.swift */; };
+		B10000000000000000000008 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* ChatMessage.swift */; };
+		B10000000000000000000010 /* ClaudeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ClaudeClient.swift */; };
+		B10000000000000000000011 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* Secrets.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A00000000000000000000006 /* Tuck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tuck.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000064 /* TuckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuckApp.swift; sourceTree = "<group>"; };
+		A00000000000000000000065 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		A00000000000000000000066 /* RoomScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanner.swift; sourceTree = "<group>"; };
+		A00000000000000000000067 /* RoomCaptureContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomCaptureContainer.swift; sourceTree = "<group>"; };
+		A00000000000000000000068 /* RoomDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomDocument.swift; sourceTree = "<group>"; };
+		A00000000000000000000069 /* RoomExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomExporter.swift; sourceTree = "<group>"; };
+		A0000000000000000000006A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A0000000000000000000006B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		A00000000000000000000076 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A000000000000000000000E0 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
+		B00000000000000000000000 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		B00000000000000000000001 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* HomeHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeader.swift; sourceTree = "<group>"; };
+		B00000000000000000000003 /* RoomStageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomStageView.swift; sourceTree = "<group>"; };
+		B00000000000000000000004 /* ChatSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSheet.swift; sourceTree = "<group>"; };
+		B00000000000000000000005 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
+		B00000000000000000000006 /* ChatBubbles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBubbles.swift; sourceTree = "<group>"; };
+		B00000000000000000000007 /* ProductCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCardView.swift; sourceTree = "<group>"; };
+		B00000000000000000000008 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		B00000000000000000000010 /* ClaudeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeClient.swift; sourceTree = "<group>"; };
+		B00000000000000000000011 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000004 /* Tuck */,
+				A0000000000000000000006B /* README.md */,
+				A00000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000006 /* Tuck.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000004 /* Tuck */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000070 /* App */,
+				A00000000000000000000071 /* Features */,
+				A00000000000000000000073 /* Models */,
+				A00000000000000000000074 /* Services */,
+				A00000000000000000000075 /* Resources */,
+			);
+			path = Tuck;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000070 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000064 /* TuckApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000071 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				B2000000000000000000000 /* Home */,
+				A00000000000000000000072 /* Scan */,
+				A000000000000000000000E2 /* Splash */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000072 /* Scan */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000065 /* ScanView.swift */,
+				A00000000000000000000067 /* RoomCaptureContainer.swift */,
+				A00000000000000000000066 /* RoomScanner.swift */,
+			);
+			path = Scan;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000073 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000068 /* RoomDocument.swift */,
+				B00000000000000000000008 /* ChatMessage.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000074 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000011 /* Secrets.swift */,
+				B00000000000000000000010 /* ClaudeClient.swift */,
+				A00000000000000000000069 /* RoomExporter.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000075 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000076 /* Assets.xcassets */,
+				A0000000000000000000006A /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A000000000000000000000E2 /* Splash */ = {
+			isa = PBXGroup;
+			children = (
+				A000000000000000000000E0 /* SplashView.swift */,
+			);
+			path = Splash;
+			sourceTree = "<group>";
+		};
+		B2000000000000000000000 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				B00000000000000000000000 /* HomeView.swift */,
+				B00000000000000000000001 /* HomeViewModel.swift */,
+				B00000000000000000000002 /* HomeHeader.swift */,
+				B00000000000000000000003 /* RoomStageView.swift */,
+				B00000000000000000000004 /* ChatSheet.swift */,
+				B00000000000000000000005 /* ChatInputBar.swift */,
+				B00000000000000000000006 /* ChatBubbles.swift */,
+				B00000000000000000000007 /* ProductCardView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000005 /* Tuck */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A0000000000000000000000B /* Build configuration list for PBXNativeTarget "Tuck" */;
+			buildPhases = (
+				A00000000000000000000007 /* Sources */,
+				A00000000000000000000008 /* Frameworks */,
+				A00000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Tuck;
+			productName = Tuck;
+			productReference = A00000000000000000000006 /* Tuck.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A00000000000000000000005 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A0000000000000000000000A /* Build configuration list for PBXProject "Tuck" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = ko;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				ko,
+				en,
+				Base,
+			);
+			mainGroup = A00000000000000000000002;
+			productRefGroup = A00000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00000000000000000000005 /* Tuck */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A000000000000000000000CE /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A000000000000000000000C8 /* TuckApp.swift in Sources */,
+				A000000000000000000000C9 /* ScanView.swift in Sources */,
+				A000000000000000000000E1 /* SplashView.swift in Sources */,
+				A000000000000000000000CA /* RoomScanner.swift in Sources */,
+				A000000000000000000000CB /* RoomCaptureContainer.swift in Sources */,
+				A000000000000000000000CC /* RoomDocument.swift in Sources */,
+				A000000000000000000000CD /* RoomExporter.swift in Sources */,
+				B10000000000000000000000 /* HomeView.swift in Sources */,
+				B10000000000000000000001 /* HomeViewModel.swift in Sources */,
+				B10000000000000000000002 /* HomeHeader.swift in Sources */,
+				B10000000000000000000003 /* RoomStageView.swift in Sources */,
+				B10000000000000000000004 /* ChatSheet.swift in Sources */,
+				B10000000000000000000005 /* ChatInputBar.swift in Sources */,
+				B10000000000000000000006 /* ChatBubbles.swift in Sources */,
+				B10000000000000000000007 /* ProductCardView.swift in Sources */,
+				B10000000000000000000008 /* ChatMessage.swift in Sources */,
+				B10000000000000000000011 /* Secrets.swift in Sources */,
+				B10000000000000000000010 /* ClaudeClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A0000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A0000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A0000000000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Tuck/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A0000000000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Tuck/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A0000000000000000000000A /* Build configuration list for PBXProject "Tuck" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0000000000000000000000C /* Debug */,
+				A0000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A0000000000000000000000B /* Build configuration list for PBXNativeTarget "Tuck" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0000000000000000000000E /* Debug */,
+				A0000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}
