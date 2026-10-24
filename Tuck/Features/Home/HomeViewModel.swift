@@ -22,6 +22,7 @@ final class HomeViewModel {
     private(set) var isResponding = false
 
     private let client = ClaudeClient()
+    private let catalog = try? ProductCatalog()
     private var responseTask: Task<Void, Never>?
 
     var sheetTitle: String { "\(userName)’s Room" }
@@ -40,7 +41,7 @@ final class HomeViewModel {
         let reply = ChatMessage(role: .assistant, text: "")
         messages.append(reply)
 
-        let turns = messages.dropLast().map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.text) }
+        let turns = messages.dropLast().map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
         isResponding = true
         responseTask = Task { [client] in
             do {
@@ -55,18 +56,35 @@ final class HomeViewModel {
         }
     }
 
+    /// 원문을 이어 붙이고 본문·카드 덩어리로 다시 나눈다. 카드는 JSON 블록이 닫힌 뒤에 나타난다.
     private func append(_ text: String, to id: ChatMessage.ID) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
-        messages[index].text += text
+        messages[index].rawText += text
+        messages[index].blocks = blocks(from: messages[index].rawText)
+    }
+
+    private func blocks(from raw: String) -> [ChatMessage.Block] {
+        ReplyParser.parse(raw).compactMap { segment in
+            switch segment {
+            case .text(let text):
+                return .text(text)
+            case .products(let picks):
+                // 카탈로그에 없는 id는 버린다.
+                let products = catalog.map { catalog in picks.compactMap { Product(pick: $0, catalog: catalog) } } ?? []
+                return products.isEmpty ? nil : .products(products)
+            }
+        }
     }
 
     private func replyIsEmpty(_ id: ChatMessage.ID) -> Bool {
-        messages.first(where: { $0.id == id })?.text.isEmpty ?? true
+        messages.first(where: { $0.id == id })?.rawText.isEmpty ?? true
     }
 
     func attachImage() { /* TODO: 이미지 입력 */ }
-    func share(_ product: Product) { /* TODO: 공유 */ }
-    func toggleSelection(of product: Product) { /* TODO: 선택 → 시뮬레이션 */ }
+    /// 카드를 누르면 선택, 선택된 카드를 다시 누르면 해제. (시뮬레이션 연동은 TODO)
+    func toggleSelection(of product: Product) {
+        selectedProductID = selectedProductID == product.id ? nil : product.id
+    }
 }
 
 #if DEBUG
@@ -102,10 +120,10 @@ extension HomeViewModel {
 
 extension Product {
     static let samples = [
-        Product(id: "chair-1", name: "Really Cool Chair", price: "$ 495.15",
-                imageURL: nil, brandLogoURL: nil, tags: ["#freeshipping", "#freeshipping", "#freeshipping", "#freeshipping"]),
-        Product(id: "chair-2", name: "Really Cool Chair", price: "$ 495.15",
-                imageURL: nil, brandLogoURL: nil, tags: ["#freeshipping", "#freeshipping", "#freeshipping", "#freeshipping"]),
+        Product(id: "chair-1", name: "Really Cool Chair", price: "$ 495.15", brand: "IKEA",
+                keywords: ["freeshipping", "modern", "walnut", "velvet"], imageURL: nil, sourceURL: URL(string: "https://www.ikea.com")),
+        Product(id: "chair-2", name: "Really Cool Chair", price: "$ 495.15", brand: "IKEA",
+                keywords: ["freeshipping", "modern"], imageURL: nil, sourceURL: nil),
     ]
 }
 
@@ -116,9 +134,13 @@ extension ChatMessage {
     )
     static let sampleAnswer = ChatMessage(
         role: .assistant,
-        text: "Sure. Here is a Typescript code block for your Analog Clock project. It is built using React, "
-            + "and uses the local time for London, England as standard. Let me know if you would like to make any refinements to the code.",
-        products: Product.samples
+        text: "",
+        blocks: [
+            .text("#### Two options\nFor a modern look, the first one is **compact** and *easy to place* next to a vanity."),
+            .products([Product.samples[0]]),
+            .text("If you want something with more storage, the second one is a better fit."),
+            .products([Product.samples[1]]),
+        ]
     )
 }
 #endif

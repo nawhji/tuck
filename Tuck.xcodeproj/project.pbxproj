@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B10000000000000000000020 /* ProductCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ProductCatalog.swift */; };
+		B10000000000000000000021 /* catalog csv in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* catalog csv */; };
 		A000000000000000000000C8 /* TuckApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000064 /* TuckApp.swift */; };
 		A000000000000000000000C9 /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000065 /* ScanView.swift */; };
 		A000000000000000000000CA /* RoomScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000066 /* RoomScanner.swift */; };
@@ -22,6 +24,7 @@
 		B10000000000000000000004 /* ChatSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000004 /* ChatSheet.swift */; };
 		B10000000000000000000005 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000005 /* ChatInputBar.swift */; };
 		B10000000000000000000006 /* ChatBubbles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000006 /* ChatBubbles.swift */; };
+		B10000000000000000000090 /* TuckAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000090 /* TuckAvatar.swift */; };
 		B10000000000000000000007 /* ProductCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000007 /* ProductCardView.swift */; };
 		B10000000000000000000008 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* ChatMessage.swift */; };
 		B10000000000000000000010 /* ClaudeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ClaudeClient.swift */; };
@@ -29,6 +32,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B00000000000000000000020 /* ProductCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCatalog.swift; sourceTree = "<group>"; };
+		B00000000000000000000021 /* catalog csv */ = {isa = PBXFileReference; lastKnownFileType = text; name = "TUCK_Product_Catalog - 시트1.csv"; path = "data/TUCK_Product_Catalog - 시트1.csv"; sourceTree = SOURCE_ROOT; };
 		A00000000000000000000006 /* Tuck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tuck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000064 /* TuckApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuckApp.swift; sourceTree = "<group>"; };
 		A00000000000000000000065 /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
@@ -47,6 +52,7 @@
 		B00000000000000000000004 /* ChatSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSheet.swift; sourceTree = "<group>"; };
 		B00000000000000000000005 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
 		B00000000000000000000006 /* ChatBubbles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBubbles.swift; sourceTree = "<group>"; };
+		B00000000000000000000090 /* TuckAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuckAvatar.swift; sourceTree = "<group>"; };
 		B00000000000000000000007 /* ProductCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCardView.swift; sourceTree = "<group>"; };
 		B00000000000000000000008 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* ClaudeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeClient.swift; sourceTree = "<group>"; };
@@ -135,6 +141,7 @@
 			children = (
 				B00000000000000000000011 /* Secrets.swift */,
 				B00000000000000000000010 /* ClaudeClient.swift */,
+				B00000000000000000000020 /* ProductCatalog.swift */,
 				A00000000000000000000069 /* RoomExporter.swift */,
 			);
 			path = Services;
@@ -144,6 +151,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000076 /* Assets.xcassets */,
+				B00000000000000000000021 /* catalog csv */,
 				A0000000000000000000006A /* Info.plist */,
 			);
 			path = Resources;
@@ -167,6 +175,7 @@
 				B00000000000000000000004 /* ChatSheet.swift */,
 				B00000000000000000000005 /* ChatInputBar.swift */,
 				B00000000000000000000006 /* ChatBubbles.swift */,
+				B00000000000000000000090 /* TuckAvatar.swift */,
 				B00000000000000000000007 /* ProductCardView.swift */,
 			);
 			path = Home;
@@ -231,6 +240,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A000000000000000000000CE /* Assets.xcassets in Resources */,
+				B10000000000000000000021 /* catalog csv in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -255,10 +265,12 @@
 				B10000000000000000000004 /* ChatSheet.swift in Sources */,
 				B10000000000000000000005 /* ChatInputBar.swift in Sources */,
 				B10000000000000000000006 /* ChatBubbles.swift in Sources */,
+				B10000000000000000000090 /* TuckAvatar.swift in Sources */,
 				B10000000000000000000007 /* ProductCardView.swift in Sources */,
 				B10000000000000000000008 /* ChatMessage.swift in Sources */,
 				B10000000000000000000011 /* Secrets.swift in Sources */,
 				B10000000000000000000010 /* ClaudeClient.swift in Sources */,
+				B10000000000000000000020 /* ProductCatalog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

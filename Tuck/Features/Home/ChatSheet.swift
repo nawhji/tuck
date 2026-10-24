@@ -11,27 +11,42 @@ struct ChatSheet<Drag: Gesture>: View {
     let dragGesture: Drag
     let onSend: () -> Void
     let onImage: () -> Void
-    let onShare: (Product) -> Void
     let onSelect: (Product) -> Void
 
-    private let bottomID = "chat-bottom"
+    @State private var tailHeight: CGFloat = 0
+
+    private var tailStart: Int {
+        messages.lastIndex(where: { $0.role == .user }) ?? messages.count
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             grabber
-            ScrollViewReader { scroll in
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        ForEach(messages) { message in
-                            messageView(message)
+            GeometryReader { viewport in
+                ScrollViewReader { scroll in
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(messages.prefix(tailStart)) { message in
+                                messageView(message).id(message.id)
+                            }
+                            // 마지막 질문과 그 답변: 높이를 재서 남는 만큼만 아래 여백으로 채운다.
+                            VStack(spacing: 16) {
+                                ForEach(messages.dropFirst(tailStart)) { message in
+                                    messageView(message).id(message.id)
+                                }
+                            }
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tailHeight = $0 }
+                            // 답변이 짧아도 질문을 맨 위로 올릴 수 있도록, 마지막 질문 이후 내용 높이를 뺀 만큼만 여백을 둔다.
+                            Color.clear.frame(height: max(viewport.size.height - tailHeight - 16, 0))
                         }
-                        Color.clear.frame(height: 1).id(bottomID)
+                        .padding(.vertical, 16)
                     }
-                    .padding(.vertical, 16)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: messages) {
-                    scroll.scrollTo(bottomID, anchor: .bottom)
+                    .scrollDismissesKeyboard(.interactively)
+                    // 질문을 보내면 그 질문이 시트 상단에 보이도록 맞추고, 스트리밍 중에는 따라가지 않는다.
+                    .onChange(of: messages.count) {
+                        guard let question = messages.last(where: { $0.role == .user }) else { return }
+                        withAnimation { scroll.scrollTo(question.id, anchor: .top) }
+                    }
                 }
             }
             ChatInputBar(
@@ -82,17 +97,30 @@ struct ChatSheet<Drag: Gesture>: View {
         case .user:
             UserBubble(text: message.text)
         case .assistant:
-            if message.text.isEmpty && message.products.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 24)
-            } else {
-                AssistantText(text: message.text)
-            }
-            ForEach(message.products) { product in
-                ProductCardView(product: product, isSelected: product.id == selectedProductID) {
-                    onShare(product)
+            VStack(alignment: .leading, spacing: 16) {
+                // 캐릭터는 본문 위 별도 줄에 둬서 텍스트 줄바꿈에 영향을 주지 않는다.
+                Group {
+                    if message.blocks.isEmpty {
+                        TuckLoadingIndicator()
+                    } else {
+                        TuckAvatar()
+                    }
                 }
-                .onTapGesture { onSelect(product) }
+                .padding(.horizontal, 26)
+                ForEach(Array(message.blocks.enumerated()), id: \.offset) { _, block in
+                    switch block {
+                    case .text(let text):
+                        AssistantText(text: text)
+                    case .products(let products):
+                        ForEach(products) { product in
+                            ProductCardView(product: product, isSelected: product.id == selectedProductID) {
+                                onSelect(product)
+                            }
+                        }
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

@@ -7,25 +7,63 @@ struct ChatMessage: Identifiable, Equatable {
         case assistant
     }
 
+    /// 에이전트 답변의 한 덩어리. 본문과 가구 카드가 번갈아 나올 수 있다.
+    enum Block: Equatable {
+        case text(String)
+        case products([Product])
+    }
+
     let id: UUID
     let role: Role
+    /// 사용자 메시지 본문.
     var text: String
-    var products: [Product]
+    /// 에이전트 답변 (JSON 블록은 카드로 바뀌어 있다).
+    var blocks: [Block]
+    /// 모델이 보낸 원문. 대화 이력을 다시 보낼 때 쓴다.
+    var rawText: String
 
-    init(id: UUID = UUID(), role: Role, text: String, products: [Product] = []) {
+    init(id: UUID = UUID(), role: Role, text: String, blocks: [Block] = []) {
         self.id = id
         self.role = role
         self.text = text
-        self.products = products
+        self.blocks = blocks
+        self.rawText = text
     }
 }
 
-/// 추천 가구 카드에 표시되는 값. 이미지·브랜드 로고는 응답이 도착하면 채워진다.
+/// 추천 가구 카드에 표시되는 값. 이름·가격·브랜드·이미지·링크는 카탈로그, 키워드는 AI가 정한다.
 struct Product: Identifiable, Equatable {
     let id: String
     var name: String
     var price: String
+    var brand: String
+    var keywords: [String]
     var imageURL: URL?
-    var brandLogoURL: URL?
-    var tags: [String]
+    var sourceURL: URL?
+}
+
+extension Product {
+    /// 카탈로그 행과 AI pick으로 카드 값을 만든다. 카탈로그에 없는 id면 nil.
+    init?(pick: ProductPick, catalog: ProductCatalog) {
+        guard let row = catalog.row(id: pick.id) else { return nil }
+        let keywords = pick.keywords.isEmpty
+            ? ProductCatalog.list(row["style_tags"])
+            : pick.keywords
+        self.init(
+            id: pick.id,
+            name: row["name"] ?? pick.id,
+            price: Self.formatPrice(cents: Int(row["price_cents"] ?? ""), currency: row["currency"] ?? "USD"),
+            brand: row["brand"] ?? "",
+            keywords: Array(keywords.prefix(4)),
+            imageURL: URL(string: row["image_url"] ?? ""),
+            sourceURL: URL(string: row["source_url"] ?? "")
+        )
+    }
+
+    /// 495.15 USD → "$ 495.15"
+    static func formatPrice(cents: Int?, currency: String) -> String {
+        guard let cents else { return "" }
+        let amount = String(format: "%.2f", Double(cents) / 100)
+        return currency == "USD" ? "$ \(amount)" : "\(amount) \(currency)"
+    }
 }

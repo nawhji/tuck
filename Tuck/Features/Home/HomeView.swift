@@ -64,7 +64,6 @@ struct HomeView: View {
                     dragGesture: sheetDrag(screen: screen),
                     onSend: model.send,
                     onImage: model.attachImage,
-                    onShare: model.share,
                     onSelect: model.toggleSelection
                 )
                 .frame(height: height)
