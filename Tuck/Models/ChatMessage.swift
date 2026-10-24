@@ -32,7 +32,7 @@ struct ChatMessage: Identifiable, Equatable {
 }
 
 /// 추천 가구 카드에 표시되는 값. 이름·가격·브랜드·이미지·링크는 카탈로그, 키워드는 AI가 정한다.
-struct Product: Identifiable, Equatable {
+struct Product: Identifiable, Equatable, Codable {
     let id: String
     var name: String
     var price: String

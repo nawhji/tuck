@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @State private var model: HomeViewModel
     @State private var showsSavedRoom = false
+    @State private var favorites = FavoritesStore()
     @GestureState private var dragOffset: CGFloat = 0
     @FocusState private var isInputFocused: Bool
 
@@ -20,6 +21,13 @@ struct HomeView: View {
             sheetLayer
         }
         .animation(.spring(duration: 0.35), value: isInputFocused)
+        .environment(favorites)
+        .sheet(isPresented: $model.isProfilePresented) {
+            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites)
+        }
+        .onChange(of: model.isProfilePresented) { _, presented in
+            if presented { isInputFocused = false }
+        }
         .task { await model.restoreLatestScan() }
         .onChange(of: model.isScanPresented) { _, presented in
             if presented { isInputFocused = false }
@@ -32,12 +40,12 @@ struct HomeView: View {
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
-        .alert("저장된 방", isPresented: Binding(
-            get: { model.scanLoadError != nil },
-            set: { if !$0 { model.scanLoadError = nil } }
+        .alert("Tuck", isPresented: Binding(
+            get: { !model.isProfilePresented && (model.scanLoadError != nil || favorites.errorMessage != nil) },
+            set: { if !$0 { model.scanLoadError = nil; favorites.errorMessage = nil } }
         )) {
-            Button("확인", role: .cancel) { model.scanLoadError = nil }
-        } message: { Text(model.scanLoadError ?? "") }
+            Button("OK", role: .cancel) { model.scanLoadError = nil; favorites.errorMessage = nil }
+        } message: { Text(model.scanLoadError ?? favorites.errorMessage ?? "") }
     }
 
     /// 방 영역과 헤더. 키보드가 올라와도 움직이지 않는다.

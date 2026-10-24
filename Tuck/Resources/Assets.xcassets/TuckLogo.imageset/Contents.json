@@ -1,7 +1,22 @@
 {
   "images" : [
-    { "filename" : "TuckLogo@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "TuckLogo@3x.png", "idiom" : "universal", "scale" : "3x" }
+    {
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "TuckLogo@2x.png",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "TuckLogo@3x.png",
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
   ],
-  "info" : { "author" : "xcode", "version" : 1 }
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
 }

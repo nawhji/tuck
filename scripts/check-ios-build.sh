@@ -24,5 +24,5 @@ if [ -n "${1:-}" ]; then
         -derivedDataPath .build/simulator CODE_SIGNING_ALLOWED=NO test \
         2>&1 | tee .build/logs/tests.log
 else
-    echo 'Builds finished. To run 7 XCTest cases, use Product > Test on an iPhone Simulator in Xcode.'
+    echo 'Builds finished. To run XCTest cases, use Product > Test on an iPhone Simulator in Xcode.'
 fi

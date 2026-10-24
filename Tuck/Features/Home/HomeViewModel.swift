@@ -15,6 +15,7 @@ final class HomeViewModel {
 
     var hasScannedSpace = false
     var isScanPresented = false
+    var isProfilePresented = false
     var savedScan: SavedScan?
     var scanLoadError: String?
     var isSimulating = false
@@ -52,7 +53,7 @@ final class HomeViewModel {
             scanLoadError = error.localizedDescription
         }
     }
-    func openProfile() { /* TODO: Profile 화면으로 이동 */ }
+    func openProfile() { isProfilePresented = true }
 
     func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)

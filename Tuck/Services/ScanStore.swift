@@ -9,6 +9,10 @@ struct SavedScan: Identifiable, Sendable {
 /// Reads only this app's Documents directory. No upload, account, or API key.
 enum ScanStore {
     static func latest(in root: URL? = nil) throws -> SavedScan? {
+        try all(in: root).first
+    }
+
+    static func all(in root: URL? = nil) throws -> [SavedScan] {
         let rootURL: URL
         if let root {
             rootURL = root
@@ -18,7 +22,7 @@ enum ScanStore {
                 appropriateFor: nil, create: true
             ).appendingPathComponent("RoomScans", isDirectory: true)
         }
-        guard FileManager.default.fileExists(atPath: rootURL.path) else { return nil }
+        guard FileManager.default.fileExists(atPath: rootURL.path) else { return [] }
         let directories = try FileManager.default.contentsOfDirectory(
             at: rootURL, includingPropertiesForKeys: [.isDirectoryKey], options: .skipsHiddenFiles
         ).filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
@@ -42,11 +46,8 @@ enum ScanStore {
             )
             scans.append(SavedScan(document: document, files: files))
         }
-        if let latest = scans.max(by: { $0.document.capturedAt < $1.document.capturedAt }) {
-            return latest
-        }
-        if !directories.isEmpty { throw StoreError.unreadable }
-        return nil
+        if scans.isEmpty && !directories.isEmpty { throw StoreError.unreadable }
+        return scans.sorted { $0.document.capturedAt > $1.document.capturedAt }
     }
 
     private enum StoreError: LocalizedError {
