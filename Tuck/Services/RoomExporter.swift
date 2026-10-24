@@ -30,11 +30,17 @@ enum RoomExporter {
 
         var model: URL?
         var warning: String?
+        // Publish only a completed USDZ. A failed export must not leave a partial
+        // room.usdz that ScanStore would offer to preview on the next launch.
+        let temporaryModel = directory.appendingPathComponent(".room-\(UUID().uuidString).usdz")
+        defer { try? FileManager.default.removeItem(at: temporaryModel) }
         do {
+            try room.export(to: temporaryModel, exportOptions: .parametric)
             if FileManager.default.fileExists(atPath: modelURL.path) {
-                try FileManager.default.removeItem(at: modelURL)
+                _ = try FileManager.default.replaceItemAt(modelURL, withItemAt: temporaryModel)
+            } else {
+                try FileManager.default.moveItem(at: temporaryModel, to: modelURL)
             }
-            try room.export(to: modelURL, exportOptions: .parametric)
             model = modelURL
         } catch {
             warning = "치수 JSON은 저장했지만 3D 파일 내보내기에 실패했어요: \(error.localizedDescription)"

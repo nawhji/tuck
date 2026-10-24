@@ -6,7 +6,7 @@ enum SheetDetent {
     case expanded
 }
 
-/// Home 화면이 그리는 상태. 채팅은 Claude API에 연결되어 있고, 스캔·시뮬레이션은 아직 연결되지 않았다.
+/// Home 화면이 그리는 상태. 채팅은 Claude API, 스캔은 기기 내 RoomPlan에 연결된다. 가구 배치는 별도 작업이다.
 @Observable
 final class HomeViewModel {
     /// 로그인이 없는 서비스라 사용자 정보는 고정값이다.
@@ -14,6 +14,9 @@ final class HomeViewModel {
     let userInitial = "H"
 
     var hasScannedSpace = false
+    var isScanPresented = false
+    var savedScan: SavedScan?
+    var scanLoadError: String?
     var isSimulating = false
     var messages: [ChatMessage] = []
     var draft = ""
@@ -30,7 +33,25 @@ final class HomeViewModel {
 
     // MARK: - Actions (미구현)
 
-    func startScan() { /* TODO: Room Scan 화면으로 이동 */ }
+    func startScan() { isScanPresented = true }
+
+    func acceptScan(document: RoomDocument, files: ScanFiles) {
+        savedScan = SavedScan(document: document, files: files)
+        hasScannedSpace = true
+    }
+
+    @MainActor
+    func restoreLatestScan() async {
+        do {
+            let scan = try await Task.detached(priority: .userInitiated) {
+                try ScanStore.latest()
+            }.value
+            guard !Task.isCancelled, savedScan == nil, let scan else { return }
+            acceptScan(document: scan.document, files: scan.files)
+        } catch {
+            scanLoadError = error.localizedDescription
+        }
+    }
     func openProfile() { /* TODO: Profile 화면으로 이동 */ }
 
     func send() {

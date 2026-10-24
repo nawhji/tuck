@@ -19,6 +19,7 @@ final class RoomScanner: ObservableObject {
 
     private weak var captureView: RoomCaptureView?
     private var capturedRoom: CapturedRoom?
+    private var processingTimeout: Task<Void, Never>?
 
     var isSupported: Bool { RoomCaptureSession.isSupported }
     // Without LiDAR (Simulator, SwiftUI previews) there is no camera view to show.
@@ -29,6 +30,8 @@ final class RoomScanner: ObservableObject {
     func start() async {
         guard isSupported, !isSaving, phase != .permission,
               phase != .scanning, phase != .processing else { return }
+        scanID = UUID()
+        let requestID = scanID
         phase = .permission
         errorMessage = nil
         saveMessage = nil
@@ -42,6 +45,7 @@ final class RoomScanner: ObservableObject {
         default:
             permitted = false
         }
+        guard requestID == scanID, phase == .permission else { return }
         guard permitted else {
             errorMessage = "카메라 접근이 필요해요. 아이폰 설정에서 이 앱의 카메라 권한을 켜주세요."
             phase = .failed
@@ -59,6 +63,7 @@ final class RoomScanner: ObservableObject {
     }
 
     func attach(_ view: RoomCaptureView) {
+        guard phase == .scanning else { return }
         captureView = view
         view.captureSession.run(configuration: RoomCaptureSession.Configuration())
     }
@@ -68,6 +73,22 @@ final class RoomScanner: ObservableObject {
         phase = .processing
         // Keep the UIView mounted until didPresent delivers the processed room.
         captureView.captureSession.stop(pauseARSession: true)
+        let token = scanID
+        processingTimeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            guard let self, self.phase == .processing else { return }
+            self.fail("3D 처리 시간이 길어졌어요. 다시 스캔해주세요.", token: token)
+        }
+    }
+
+    /// Invalidate permission requests and late RoomPlan callbacks before stopping.
+    func cancel() {
+        scanID = UUID()
+        processingTimeout?.cancel()
+        processingTimeout = nil
+        captureView?.captureSession.stop(pauseARSession: true)
+        captureView = nil
+        phase = .idle
     }
 
     func updateCounts(walls: Int, objects: Int, token: UUID) {
@@ -78,6 +99,8 @@ final class RoomScanner: ObservableObject {
 
     func fail(_ message: String, token: UUID) {
         guard token == scanID, phase == .scanning || phase == .processing else { return }
+        processingTimeout?.cancel()
+        processingTimeout = nil
         errorMessage = message
         phase = .failed
     }
@@ -88,6 +111,8 @@ final class RoomScanner: ObservableObject {
             fail("인식된 벽이나 가구가 없어요. 벽과 바닥이 함께 보이도록 다시 스캔해주세요.", token: token)
             return
         }
+        processingTimeout?.cancel()
+        processingTimeout = nil
         capturedRoom = room
         document = RoomDocument(room: room)
         wallCount = room.walls.count

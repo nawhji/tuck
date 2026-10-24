@@ -3,12 +3,19 @@ import SwiftUI
 @MainActor
 struct ScanView: View {
     @StateObject private var scanner: RoomScanner
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var selection = 0
+    @State private var confirmsDiscard = false
+    private let autoStart: Bool
+    private let onSaved: (RoomDocument, ScanFiles) -> Void
 
     /// Pass a scanner only to inject a fixed state (SwiftUI previews).
-    init(scanner: RoomScanner? = nil) {
+    init(scanner: RoomScanner? = nil, onSaved: @escaping (RoomDocument, ScanFiles) -> Void = { _, _ in }) {
         _scanner = StateObject(wrappedValue: scanner ?? RoomScanner())
+        autoStart = scanner == nil
+        self.onSaved = onSaved
     }
 
     var body: some View {
@@ -57,10 +64,47 @@ struct ScanView: View {
             .background(Color(.systemBackground))
             .navigationTitle("내 방 스캔")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("닫기") {
+                        if scanner.phase == .scanning || scanner.phase == .processing ||
+                            (scanner.document != nil && scanner.files == nil) {
+                            confirmsDiscard = true
+                        } else {
+                            finishAndDismiss()
+                        }
+                    }
+                    .disabled(scanner.isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if scanner.phase == .ready {
+                        Button("홈에 적용") { finishAndDismiss() }
+                            .disabled(scanner.isSaving || scanner.files == nil)
+                    }
+                }
+            }
         }
+        .interactiveDismissDisabled()
+        .task { if autoStart { await scanner.start() } }
+        .onDisappear { scanner.cancel() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background { scanner.stop() }
+            if phase == .background {
+                if scanner.phase == .permission { scanner.cancel() }
+                else { scanner.stop() }
+            }
         }
+        .confirmationDialog("저장하지 않은 스캔을 종료할까요?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            Button("스캔 종료", role: .destructive) { finishAndDismiss() }
+            Button("계속 스캔", role: .cancel) {}
+        }
+    }
+
+    private func finishAndDismiss() {
+        if let document = scanner.document, let files = scanner.files {
+            onSaved(document, files)
+        }
+        scanner.cancel()
+        dismiss()
     }
 
     private var placeholder: some View {
@@ -92,6 +136,9 @@ struct ScanView: View {
         case .ready:
             if scanner.isSaving {
                 ProgressView("치수와 3D 파일 저장 중…")
+            } else if scanner.files != nil {
+                Label("아이폰에 저장됨", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 if let files = scanner.files {
@@ -116,6 +163,11 @@ struct ScanView: View {
             .font(.subheadline)
             .buttonStyle(.bordered)
         case .idle, .failed:
+            if scanner.phase == .failed {
+                Button("앱 설정 열기") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+            }
             Button { Task { await scanner.start() } } label: {
                 Label("방 스캔 시작", systemImage: "camera.fill")
                     .frame(maxWidth: .infinity)
@@ -158,7 +210,7 @@ struct ScanView: View {
                 .padding(.vertical, 4)
             }
             .frame(height: 150)
-            Text("가로 × 높이 × 깊이 · 측정값은 추정치예요.")
+            Text("가로 × 높이 × 깊이 · 로컬 축 기준 추정치예요.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

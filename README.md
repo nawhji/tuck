@@ -1,5 +1,8 @@
 # tuck
 
+홈 카메라의 RoomPlan 연결·저장된 방 복원 코드 및 Xcode 실행 안내는
+[RoomPlan 연결 안내](docs/roomplan-setup.md)를 참고하세요. 이 변경의 iOS 빌드·실기기 검증은 아직 필요합니다.
+
 내 방을 LiDAR로 스캔해 3D 미니어처로 만들고, **AI 에이전트와의 대화 하나로**
 가구 검색·추천 → 방 안 배치 시뮬레이션 → 주문·결제(Stripe 테스트 모드)까지 끝내는 iOS 앱. (CalHacks 13.0)
 
@@ -84,8 +87,8 @@ Splash ─▶ Home(빈 상태) ──[+ / 카메라]──▶ Room Scan ──[�
 
 1. **스캔** — `RoomCaptureView` → `CapturedRoom` → `RoomDocument` → `RoomExporter`가
    `Documents/RoomScans/<id>/`에 `room.json`, `captured-room.json`, `room.usdz` 저장.
-2. **홈 표시** — 가장 최근 스캔의 `room.usdz`를 3D 미니어처로 렌더링. (현재 샘플은 앱 재실행 시
-   자동 복원하지 않으므로 `ScanStore` 필요)
+2. **홈 표시** — 가장 최근의 읽을 수 있는 스캔을 `ScanStore`로 복원하고 `room.usdz`를 3D로 렌더링.
+   홈에서 치수·공유 화면을 다시 열 수 있음. (실기기 검증 필요)
 3. **대화** — 앱이 질문 + `room.json`을 `AgentClient`로 전송, 서버가 에이전트 루프를 돌리며
    텍스트와 구조화된 블록(`product_cards`, `place_in_room`, `order_draft`)을 스트리밍으로 돌려줌.
 4. **시뮬레이션** — 카드 탭 시 `Product`의 3D 에셋(없으면 `dimensions` 크기의 박스)을
@@ -128,8 +131,9 @@ Splash ─▶ Home(빈 상태) ──[+ / 카메라]──▶ Room Scan ──[�
 | 영역 | 상태 |
 | --- | --- |
 | Splash / 앱 아이콘 / 로고 에셋 | 완료 (`Tuck/Resources/Assets.xcassets`) |
-| Scan (RoomPlan, JSON·USDZ 내보내기) | 완료, 실기기 검증 필요 |
-| Home 레이아웃, Chat UI, 추천 카드, 주문 확인 카드 | 미구현 |
+| Scan (RoomPlan, JSON·USDZ 내보내기) | 홈 연결·로컬 복원 구현, Xcode 빌드·실기기 검증 필요 |
+| Home 레이아웃, Chat UI, 추천 카드 | 기존 구현 유지, 홈 스캔 진입과 저장된 방 표시 추가 |
+| 주문 확인 카드 | 미구현 |
 | Simulation (가구 배치·이동) | 미구현 |
 | Profile (주소·카드 등록·주문 내역) | 미구현 |
 | Agent 백엔드 (에이전트 루프, 도구, Stripe, 웹훅) | 미구현 |

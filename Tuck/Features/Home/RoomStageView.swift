@@ -1,13 +1,28 @@
 import SwiftUI
 
-/// 시트 위 영역. 스캔 전에는 점선 원, 스캔 후에는 3D 미니어처가 들어갈 자리를 보여준다.
+/// 시트 위 영역. 스캔 전에는 점선 원, 스캔 후에는 저장된 USDZ와 치수 열기 버튼을 보여준다.
 struct RoomStageView: View {
     let hasScannedSpace: Bool
     let onScanTap: () -> Void
+    var modelURL: URL? = nil
+    var onViewScan: (() -> Void)? = nil
 
     var body: some View {
         if hasScannedSpace {
-            miniaturePlaceholder
+            VStack(spacing: 8) {
+                if let modelURL {
+                    SavedRoomPreview(url: modelURL)
+                        .frame(width: 296, height: 250)
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                } else {
+                    miniaturePlaceholder
+                }
+                if let onViewScan {
+                    Button("View measurements", action: onViewScan)
+                        .font(.caption.weight(.medium))
+                        .buttonStyle(.bordered)
+                }
+            }
         } else {
             emptyState
         }
