@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "id": "16A6EE79-7CFB-4ABC-B03B-C58543C39900",
+  "capturedAt": "2026-10-24T09:00:00Z",
+  "units": "meters",
+  "coordinateSystem": "right-handed-y-up",
+  "transformLayout": "column-major",
+  "walls": [
+    {
+      "id": "86234DB0-BE56-4309-BAFC-BEB03BA76053",
+      "kind": "wall",
+      "category": "wall",
+      "label": null,
+      "confidence": "high",
+      "dimensions": {
+        "width": 4,
+        "height": 2.7,
+        "depth": 0
+      },
+      "position": {
+        "x": 0,
+        "y": 0.35,
+        "z": -1.5
+      },
+      "transform": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0.35,
+        -1.5,
+        1
+      ]
+    }
+  ],
+  "doors": [],
+  "windows": [],
+  "openings": [],
+  "floors": [
+    {
+      "id": "73A9247D-5AB9-4D14-8E6F-85322E3D487C",
+      "kind": "floor",
+      "category": "floor",
+      "label": null,
+      "confidence": "high",
+      "dimensions": {
+        "width": 4,
+        "height": 3,
+        "depth": 0
+      },
+      "position": {
+        "x": 0,
+        "y": -1,
+        "z": 0
+      },
+      "transform": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        -1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        -1,
+        0,
+        1
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "64BFD362-9502-4ADB-B9DF-127C36B8D1EF",
+      "kind": "object",
+      "category": "table",
+      "label": "화장대",
+      "confidence": "high",
+      "dimensions": {
+        "width": 1,
+        "height": 0.75,
+        "depth": 0.4
+      },
+      "position": {
+        "x": 1.2,
+        "y": -0.625,
+        "z": -0.9
+      },
+      "transform": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1.2,
+        -0.625,
+        -0.9,
+        1
+      ]
+    }
+  ]
+}

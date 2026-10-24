@@ -1,0 +1,124 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {};
+    objectVersion = 56;
+    objects = {
+/* Begin PBXBuildFile section */
+		A000000000000000000000C8 /* RoomScanStarterApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000064 /* RoomScanStarterApp.swift */; };
+		A000000000000000000000C9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000065 /* ContentView.swift */; };
+		A000000000000000000000CA /* RoomScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000066 /* RoomScanner.swift */; };
+		A000000000000000000000CB /* RoomCaptureContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000067 /* RoomCaptureContainer.swift */; };
+		A000000000000000000000CC /* RoomDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000068 /* RoomDocument.swift */; };
+		A000000000000000000000CD /* RoomExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000069 /* RoomExporter.swift */; };
+/* End PBXBuildFile section */
+/* Begin PBXFileReference section */
+		A00000000000000000000064 /* RoomScanStarterApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanStarterApp.swift; sourceTree = "<group>"; };
+		A00000000000000000000065 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00000000000000000000066 /* RoomScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanner.swift; sourceTree = "<group>"; };
+		A00000000000000000000067 /* RoomCaptureContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomCaptureContainer.swift; sourceTree = "<group>"; };
+		A00000000000000000000068 /* RoomDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomDocument.swift; sourceTree = "<group>"; };
+		A00000000000000000000069 /* RoomExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomExporter.swift; sourceTree = "<group>"; };
+        A0000000000000000000006A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        A0000000000000000000006B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+        A00000000000000000000006 /* RoomScanStarter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoomScanStarter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+/* Begin PBXFrameworksBuildPhase section */
+        A00000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+/* Begin PBXGroup section */
+        A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000004, A0000000000000000000006B, A00000000000000000000003); sourceTree = "<group>"; };
+        A00000000000000000000004 = {isa = PBXGroup; children = (
+				A00000000000000000000064 /* RoomScanStarterApp.swift */,
+				A00000000000000000000065 /* ContentView.swift */,
+				A00000000000000000000066 /* RoomScanner.swift */,
+				A00000000000000000000067 /* RoomCaptureContainer.swift */,
+				A00000000000000000000068 /* RoomDocument.swift */,
+				A00000000000000000000069 /* RoomExporter.swift */,
+                A0000000000000000000006A /* Info.plist */,
+            ); path = RoomScanStarter; sourceTree = "<group>"; };
+        A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000006); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+/* Begin PBXNativeTarget section */
+        A00000000000000000000005 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A0000000000000000000000B;
+            buildPhases = (A00000000000000000000007, A00000000000000000000008, A00000000000000000000009);
+            buildRules = ();
+            dependencies = ();
+            name = RoomScanStarter;
+            productName = RoomScanStarter;
+            productReference = A00000000000000000000006;
+            productType = "com.apple.product-type.application";
+        };
+/* End PBXNativeTarget section */
+/* Begin PBXProject section */
+        A00000000000000000000001 = {
+            isa = PBXProject;
+            attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 1600; TargetAttributes = { A00000000000000000000005 = { CreatedOnToolsVersion = 16.0; }; }; };
+            buildConfigurationList = A0000000000000000000000A;
+            compatibilityVersion = "Xcode 14.0";
+            developmentRegion = ko;
+            hasScannedForEncodings = 0;
+            knownRegions = (ko, en, Base);
+            mainGroup = A00000000000000000000002;
+            productRefGroup = A00000000000000000000003;
+            projectDirPath = "";
+            projectRoot = "";
+            targets = (A00000000000000000000005);
+        };
+/* End PBXProject section */
+/* Begin PBXResourcesBuildPhase section */
+        A00000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXSourcesBuildPhase section */
+        A00000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+				A000000000000000000000C8 /* RoomScanStarterApp.swift in Sources */,
+				A000000000000000000000C9 /* ContentView.swift in Sources */,
+				A000000000000000000000CA /* RoomScanner.swift in Sources */,
+				A000000000000000000000CB /* RoomCaptureContainer.swift in Sources */,
+				A000000000000000000000CC /* RoomDocument.swift in Sources */,
+				A000000000000000000000CD /* RoomExporter.swift in Sources */,
+            ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+/* Begin XCBuildConfiguration section */
+        A0000000000000000000000C = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; DEBUG_INFORMATION_FORMAT = dwarf; GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)"); SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
+        A0000000000000000000000D = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; VALIDATE_PRODUCT = YES; }; name = Release; };
+        A0000000000000000000000E = {isa = XCBuildConfiguration; buildSettings = {
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = NO;
+                INFOPLIST_FILE = RoomScanStarter/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+                PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.RoomScanStarter;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                SWIFT_STRICT_CONCURRENCY = minimal;
+                TARGETED_DEVICE_FAMILY = "1,2";
+                ENABLE_PREVIEWS = YES;
+            }; name = Debug; };
+        A0000000000000000000000F = {isa = XCBuildConfiguration; buildSettings = {
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = NO;
+                INFOPLIST_FILE = RoomScanStarter/Info.plist;
+                IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+                PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.RoomScanStarter;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+                SUPPORTS_MACCATALYST = NO;
+                SWIFT_VERSION = 5.0;
+                SWIFT_STRICT_CONCURRENCY = minimal;
+                TARGETED_DEVICE_FAMILY = "1,2";
+                ENABLE_PREVIEWS = YES;
+            }; name = Release; };
+/* End XCBuildConfiguration section */
+/* Begin XCConfigurationList section */
+        A0000000000000000000000A = {isa = XCConfigurationList; buildConfigurations = (A0000000000000000000000C, A0000000000000000000000D); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        A0000000000000000000000B = {isa = XCConfigurationList; buildConfigurations = (A0000000000000000000000E, A0000000000000000000000F); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+    };
+    rootObject = A00000000000000000000001;
+}
