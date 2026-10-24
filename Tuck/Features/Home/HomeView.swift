@@ -19,6 +19,16 @@ struct HomeView: View {
             sheetLayer
         }
         .animation(.spring(duration: 0.35), value: isInputFocused)
+        .preferredColorScheme(.light)
+        .fullScreenCover(isPresented: $model.isPresentingScan) {
+            DemoScanView(
+                onFinish: { model.finishDemoScan() },
+                onCancel: { model.isPresentingScan = false }
+            )
+        }
+        .onChange(of: model.isPresentingScan) { _, presented in
+            if presented { isInputFocused = false }
+        }
     }
 
     /// 방 영역과 헤더. 키보드가 올라와도 움직이지 않는다.

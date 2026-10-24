@@ -14,6 +14,7 @@ final class HomeViewModel {
     let userInitial = "H"
 
     var hasScannedSpace = false
+    var isPresentingScan = false
     var isSimulating = false
     var messages: [ChatMessage] = []
     var draft = ""
@@ -30,7 +31,14 @@ final class HomeViewModel {
 
     // MARK: - Actions (미구현)
 
-    func startScan() { /* TODO: Room Scan 화면으로 이동 */ }
+    func startScan() { isPresentingScan = true }
+
+    /// Demo destination is deliberately independent of RoomPlan success or support.
+    func finishDemoScan() {
+        hasScannedSpace = true
+        sheetDetent = .collapsed
+        isPresentingScan = false
+    }
     func openProfile() { /* TODO: Profile 화면으로 이동 */ }
 
     func send() {
