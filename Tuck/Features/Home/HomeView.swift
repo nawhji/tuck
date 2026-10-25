@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct HomeView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var model: HomeViewModel
     @State private var showsSavedRoom = false
     @State private var favorites = FavoritesStore()
@@ -79,11 +80,11 @@ struct HomeView: View {
         } message: { Text("Give your room a name.") }
         .alert("Tuck", isPresented: Binding(
             get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms && !showsRoomLibrary &&
-                (saveError != nil || model.scanLoadError != nil || favorites.errorMessage != nil) },
-            set: { if !$0 { saveError = nil; model.scanLoadError = nil; favorites.errorMessage = nil } }
+                (saveError != nil || model.scanLoadError != nil || model.chatStorageError != nil || favorites.errorMessage != nil) },
+            set: { if !$0 { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil } }
         )) {
-            Button("OK", role: .cancel) { saveError = nil; model.scanLoadError = nil; favorites.errorMessage = nil }
-        } message: { Text(saveError ?? model.scanLoadError ?? favorites.errorMessage ?? "") }
+            Button("OK", role: .cancel) { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil }
+        } message: { Text(saveError ?? model.scanLoadError ?? model.chatStorageError ?? favorites.errorMessage ?? "") }
         .fullScreenCover(isPresented: $model.isPresentingScan) {
             DemoScanView(
                 onFinish: { scan in
@@ -99,7 +100,10 @@ struct HomeView: View {
         .onChange(of: isInputFocused) { _, focused in
             if focused { model.sheetDetent = .expanded }
         }
-        .onDisappear { noticeTask?.cancel() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { model.persistChat() }
+        }
+        .onDisappear { noticeTask?.cancel(); model.persistChat() }
     }
 
     private func height(in geometry: GeometryProxy) -> CGFloat {
@@ -343,11 +347,15 @@ struct HomeView: View {
             do {
                 let layout = try await preview.snapshot()
                 let name = roomName
-                let entries = try await Task.detached(priority: .userInitiated) {
-                    if let existingID { try RoomLibraryStore.saveExisting(id: existingID, layout: layout) }
-                    else { _ = try RoomLibraryStore.saveNew(name: name, layout: layout) }
-                    return try RoomLibraryStore.all()
+                let (savedID, entries) = try await Task.detached(priority: .userInitiated) {
+                    let savedID: String
+                    if let existingID {
+                        try RoomLibraryStore.saveExisting(id: existingID, layout: layout)
+                        savedID = existingID
+                    } else { savedID = try RoomLibraryStore.saveNew(name: name, layout: layout) }
+                    return (savedID, try RoomLibraryStore.all())
                 }.value
+                model.persistChat(forSavedRoomID: savedID)
                 model.updateRoomNames(entries)
                 // An overwrite can change the selected destination. Open its fresh saved version.
                 if let destination = roomAfterLeaving {

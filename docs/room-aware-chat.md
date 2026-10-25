@@ -11,7 +11,7 @@ This local branch starts from the latest available exported `tuck-room-navigatio
 - Every Send reads a fresh, validated snapshot from the displayed 3D editor before calling Claude.
 - Context includes room ID/name/revision, provenance (scanned or sample), selected object, furniture labels/categories/confidence, actual displayed dimensions, centers, rotations, world box corners and axis-aligned bounds, plus structural measurements.
 - Current editor placement wins over the original scan. Moved/removed furniture is reflected even before saving.
-- Each room has a separate in-memory chat history. Returning to a room restores its history; histories are not persisted across app relaunch.
+- Each room has a separate local JSON chat history under Documents/RoomChats. Reopening the same room after app relaunch restores messages and rebuilds product cards from the current catalog. Raw scans retain their scan identity; naming a room carries the chat to its saved room ID.
 - Switching rooms cancels in-flight work and rejects stale responses. Failed geometry capture restores the pending question and does not send stale geometry.
 - Existing catalog/card formatting and streaming text remain intact. Product inches must be converted to meters (0.0254).
 - Snapshot JSON is sent to the existing Claude API with the system context on each question. USDZ, camera images and raw video are not sent by this change.
@@ -30,9 +30,14 @@ No `check_fit` tool, certified free-space detection, generated placement zones, 
 
 ## Validation
 
-- 44 macOS core tests passed using a temporary test harness (RoomPlan capture initializers and Observation macros are omitted in that harness).
+- 52 macOS core tests passed using a temporary test harness (RoomPlan capture initializers and Observation macros are omitted in that harness).
 - Pure JavaScript checks passed for rotated bounds, unsaved moves, labels, selection, deleted objects and sample provenance: `node scripts/test-room-context.js`.
 - iPhoneOS Debug build passed with signing disabled. The local compiler required `OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox'` for macro expansion in this execution environment.
 - No live Claude API request was made and no device installation was performed.
 
 `room-aware-chat.patch` contains only the feature changes relative to `2213ccd`; applying it to older layouts may require adapting the integration points.
+
+
+## Persistent history update
+
+User messages are checkpointed before the API request, streamed answers at most every 0.5 seconds, and replies at completion. The current history is also saved on room changes and app inactivity. Abrupt termination can lose the last fraction of an in-progress answer, but the last checkpoint is restored with an interruption marker. Saved histories are device-local, not cloud sync. Corrupt/unsupported history files are preserved and an error is displayed instead of overwriting them. Only raw messages and IDs are persisted; card data is rebuilt from the catalog. Save-as-new copies the current conversation; overwriting a named room retains existing destination messages and deduplicates by message UUID. This update is left uncommitted for the user to review.

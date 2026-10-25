@@ -67,6 +67,50 @@ final class HomeViewModel {
     var sheetDetent: SheetDetent = .collapsed
     private(set) var isResponding = false
 
+    var chatStorageError: String?
+    private let historyStore: RoomChatStore
+    private var lastCheckpoint = Date.distantPast
+    private var streamingReplyID: UUID?
+
+    init(historyDirectory: URL? = nil) {
+        historyStore = RoomChatStore(directory: historyDirectory)
+        do { messages = try historyStore.load("no-room"); rebuildCards() }
+        catch { chatStorageError = error.localizedDescription }
+    }
+
+    /// Also called when the app becomes inactive; termination callbacks are not required.
+    func persistChat() {
+        do {
+            try historyStore.save(messages, key: conversationKey, streamingID: streamingReplyID)
+            lastCheckpoint = Date()
+        } catch { chatStorageError = error.localizedDescription }
+    }
+
+    private func rebuildCards() {
+        for index in messages.indices where messages[index].role == .assistant {
+            messages[index].blocks = blocks(from: messages[index].rawText)
+        }
+    }
+
+    /// Saving a scan/layout under a new room ID carries its conversation along.
+    /// Existing destination history is retained, with UUIDs preventing duplicates.
+    func persistChat(forSavedRoomID id: String) {
+        responseTask?.cancel()
+        interruptReply()
+        responseID = UUID()
+        isResponding = false
+        persistChat()
+        streamingReplyID = nil
+        let key = "saved:" + id
+        do {
+            var combined = try historyStore.load(key)
+            var ids = Set(combined.map(\.id))
+            combined += messages.filter { !$0.rawText.isEmpty && ids.insert($0.id).inserted }
+            try historyStore.save(combined, key: key)
+            conversations[key] = combined
+        } catch { chatStorageError = "Room saved, but its chat couldn't be saved: " + error.localizedDescription }
+    }
+
     private let client = ClaudeClient()
     private let catalog = try? ProductCatalog()
     private var roomGeneration = 0
@@ -75,14 +119,31 @@ final class HomeViewModel {
     private var conversationKey = "no-room"
     private var conversations: [String: [ChatMessage]] = [:]
 
+    private func interruptReply() {
+        if let id = streamingReplyID, let index = messages.firstIndex(where: { $0.id == id }),
+           !messages[index].rawText.isEmpty {
+            messages[index].rawText += "\n\n[This reply was interrupted. Send a follow-up to continue.]"
+            messages[index].blocks = blocks(from: messages[index].rawText)
+        }
+        streamingReplyID = nil
+    }
+
     private func activateConversation(_ key: String) {
         responseTask?.cancel()
+        interruptReply()
         responseID = UUID()
         isResponding = false
         if let last = messages.last, last.role == .assistant, last.rawText.isEmpty { messages.removeLast() }
+        persistChat()
+        streamingReplyID = nil
         conversations[conversationKey] = messages
         conversationKey = key
-        messages = conversations[key] ?? []
+        if let cached = conversations[key] { messages = cached }
+        else {
+            do { messages = try historyStore.load(key) }
+            catch { messages = []; chatStorageError = error.localizedDescription }
+        }
+        rebuildCards()
         selectedProductID = nil
         draft = ""
     }
@@ -128,7 +189,8 @@ final class HomeViewModel {
     }
 
     func openSavedRoom(_ entry: RoomLibraryEntry) {
-        activateConversation("saved:" + entry.id)
+        let key = entry.layout == nil ? entry.scan.map { "scan:" + $0.id } ?? "saved:" + entry.id : "saved:" + entry.id
+        activateConversation(key)
         roomGeneration += 1
         sceneID = UUID()
         activeLayout = entry.layout
@@ -189,7 +251,13 @@ final class HomeViewModel {
         draft = ""
         isResponding = true
         responseTask = Task { [client] in
-            defer { if responseID == requestID { isResponding = false } }
+            defer {
+                if responseID == requestID {
+                    streamingReplyID = nil
+                    persistChat()
+                    isResponding = false
+                }
+            }
             var replyID: ChatMessage.ID?
             do {
                 // Fail closed when a room is open but its preview cannot provide current geometry.
@@ -203,10 +271,13 @@ final class HomeViewModel {
                 try Task.checkCancellation()
                 guard generation == roomGeneration, responseID == requestID else { return }
                 messages.append(ChatMessage(role: .user, text: text))
+                persistChat()
                 let turns = messages.map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
                 let reply = ChatMessage(role: .assistant, text: "")
                 replyID = reply.id
+                streamingReplyID = reply.id
                 messages.append(reply)
+                lastCheckpoint = .distantPast
                 for try await chunk in client.stream(turns, roomContext: context) {
                     try Task.checkCancellation()
                     guard generation == roomGeneration, responseID == requestID else { return }
@@ -230,6 +301,7 @@ final class HomeViewModel {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
         messages[index].rawText += text
         messages[index].blocks = blocks(from: messages[index].rawText)
+        if Date().timeIntervalSince(lastCheckpoint) >= 0.5 { persistChat() }
     }
 
     private func blocks(from raw: String) -> [ChatMessage.Block] {
