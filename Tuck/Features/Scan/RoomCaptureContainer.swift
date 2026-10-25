@@ -1,4 +1,5 @@
 import RoomPlan
+import OSLog
 import SwiftUI
 import UIKit
 
@@ -14,7 +15,8 @@ struct RoomCaptureContainer: UIViewControllerRepresentable {
         let controller = CaptureController()
         controller.captureView.isModelEnabled = false
         controller.captureView.delegate = context.coordinator
-        controller.captureView.captureSession.delegate = context.coordinator
+        // RoomCaptureView owns its session's live visualization callbacks.
+        // App-level processed results use captureView.delegate only.
         controller.onAppear = { [weak scanner] view in scanner?.attach(view) }
         return controller
     }
@@ -23,30 +25,72 @@ struct RoomCaptureContainer: UIViewControllerRepresentable {
 
     static func dismantleUIViewController(_ controller: CaptureController, coordinator: Coordinator) {
         controller.onAppear = nil
+        controller.stopDiagnostics()
         controller.captureView.delegate = nil
-        controller.captureView.captureSession.delegate = nil
-        controller.captureView.captureSession.stop(pauseARSession: true)
+        coordinator.detach(controller.captureView)
     }
 
-    /// Start only once the camera view has a window and a laid-out size.
+    /// A SwiftUI appearance alone doesn't guarantee a window and nonzero bounds.
     final class CaptureController: UIViewController {
         let captureView = RoomCaptureView(frame: .zero)
         var onAppear: ((RoomCaptureView) -> Void)?
         private var didStart = false
+        private var isVisible = false
+        private var frameCheck: Timer?
+        private var frameChecks = 0
 
         override func loadView() { view = captureView }
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            guard !didStart else { return }
+            isVisible = true
+            startWhenReady()
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            startWhenReady()
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            isVisible = false
+            stopDiagnostics()
+        }
+
+        private func startWhenReady() {
+            guard isVisible, !didStart, captureView.window != nil,
+                  captureView.bounds.width > 0, captureView.bounds.height > 0,
+                  let onAppear else { return }
             didStart = true
-            onAppear?(captureView)
+            RoomScanDiagnostics.log.info("Capture view ready: \(self.captureView.bounds.width)x\(self.captureView.bounds.height)")
+            onAppear(captureView)
+            // Inspect currentFrame without replacing RoomPlan's AR/session delegates.
+            frameCheck = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkFirstFrame() }
+            }
+        }
+
+        private func checkFirstFrame() {
+            frameChecks += 1
+            if let frame = captureView.captureSession.arSession.currentFrame {
+                RoomScanDiagnostics.log.info("First AR camera frame received. Tracking: \(String(describing: frame.camera.trackingState), privacy: .public)")
+                stopDiagnostics()
+            } else if frameChecks >= 10 {
+                RoomScanDiagnostics.log.warning("No AR camera frame after 10 seconds. Check device logs.")
+                stopDiagnostics()
+            }
+        }
+
+        func stopDiagnostics() {
+            frameCheck?.invalidate()
+            frameCheck = nil
         }
     }
 
     @MainActor
     @objc(TuckRoomCaptureCoordinator)
-    final class Coordinator: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
+    final class Coordinator: NSObject, RoomCaptureViewDelegate {
         private weak var scanner: RoomScanner?
         private let token: UUID
 
@@ -55,8 +99,7 @@ struct RoomCaptureContainer: UIViewControllerRepresentable {
             self.token = token
         }
 
-        // The current RoomPlan SDK makes its delegate protocols NSCoding. The
-        // coordinator is never archived, so these only satisfy the conformance.
+        // RoomCaptureViewDelegate inherits NSCoding. The coordinator isn't archived.
         nonisolated func encode(with coder: NSCoder) {}
 
         nonisolated required init?(coder: NSCoder) { return nil }
@@ -70,6 +113,7 @@ struct RoomCaptureContainer: UIViewControllerRepresentable {
                 report(error.localizedDescription)
                 return false
             }
+            RoomScanDiagnostics.log.info("RoomPlan raw scan received; requesting processed result.")
             return true
         }
 
@@ -78,33 +122,28 @@ struct RoomCaptureContainer: UIViewControllerRepresentable {
                 report(error.localizedDescription)
                 return
             }
+            RoomScanDiagnostics.log.info("RoomPlan processed result: \(processedResult.walls.count) walls, \(processedResult.objects.count) objects")
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.scanner?.receive(processedResult, token: self.token)
             }
         }
 
-        nonisolated func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
-            let walls = room.walls.count
-            let objects = room.objects.count
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.scanner?.updateCounts(walls: walls, objects: objects, token: self.token)
-            }
-        }
-
-        nonisolated func captureSession(
-            _ session: RoomCaptureSession, didEndWith data: CapturedRoomData, error: Error?
-        ) {
-            if let error { report(error.localizedDescription) }
-            // Success is handled only by captureView(didPresent:error:).
+        func detach(_ view: RoomCaptureView) {
+            scanner?.detach(view)
         }
 
         private nonisolated func report(_ message: String) {
+            RoomScanDiagnostics.log.error("RoomPlan capture error: \(message, privacy: .public)")
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.scanner?.fail(message, token: self.token)
             }
         }
     }
+}
+
+/// Lifecycle events only; never logs images, room geometry, names or API keys.
+enum RoomScanDiagnostics {
+    static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Tuck", category: "RoomScan")
 }

@@ -1,0 +1,143 @@
+import Foundation
+
+struct RoomLayoutSnapshot: Codable, Sendable, Equatable {
+    struct Item: Codable, Sendable, Equatable {
+        let instanceId: String
+        let assetId: String
+        let position: [Double]
+        let yawRadians: Double
+    }
+    let version: Int
+    let units: String
+    let upAxis: String
+    let items: [Item]
+
+    func validate() throws {
+        guard version == 1, units == "meters", upAxis == "Y", items.count <= 100 else {
+            throw RoomLibraryError.invalidLayout
+        }
+        var ids = Set<String>()
+        for item in items {
+            guard !item.instanceId.isEmpty, item.instanceId.count <= 120,
+                  ids.insert(item.instanceId).inserted,
+                  !item.assetId.isEmpty, item.assetId.count <= 120,
+                  item.position.count == 3, item.position.allSatisfy({ $0.isFinite && abs($0) < 100 }),
+                  item.yawRadians.isFinite else { throw RoomLibraryError.invalidLayout }
+        }
+    }
+}
+
+struct RoomLibraryEntry: Identifiable, Sendable {
+    let id: String
+    let name: String
+    let updatedAt: Date
+    let layout: RoomLayoutSnapshot?
+    let scan: SavedScan?
+}
+
+enum RoomLibraryError: LocalizedError {
+    case invalidLayout, invalidName, roomNotFound, unreadable, previewNotReady
+    var errorDescription: String? {
+        switch self {
+        case .invalidLayout: "The room layout couldn't be read. Your room has not been removed."
+        case .invalidName: "Enter a room name with 1–60 characters."
+        case .roomNotFound: "That saved room is no longer available."
+        case .unreadable: "Your saved rooms couldn't be loaded. The original files have been kept."
+        case .previewNotReady: "The 3D room is still loading. Try saving again in a moment."
+        }
+    }
+}
+
+/// Named layout snapshots extend the existing scan library without deleting scan measurements.
+enum RoomLibraryStore {
+    private struct Record: Codable {
+        let id: String
+        let name: String
+        let createdAt: Date
+        let updatedAt: Date
+        let layout: RoomLayoutSnapshot
+    }
+
+    private static func root(_ override: URL?) throws -> URL {
+        if let override { return override }
+        return try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                           appropriateFor: nil, create: true)
+            .appendingPathComponent("RoomLayouts", isDirectory: true)
+    }
+
+    private static func safeID(_ id: String) -> Bool {
+        !id.isEmpty && id.count <= 120 && id.utf8.allSatisfy {
+            (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 || $0 == 95
+        }
+    }
+
+    static func all(scansRoot: URL? = nil, layoutsRoot: URL? = nil) throws -> [RoomLibraryEntry] {
+        var entries: [String: RoomLibraryEntry] = [:]
+        var scanError: Error?
+        do {
+            for scan in try ScanStore.all(in: scansRoot) where safeID(scan.id) {
+                let name = "Room · " + scan.document.capturedAt.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+                entries[scan.id] = RoomLibraryEntry(id: scan.id, name: name,
+                    updatedAt: scan.document.capturedAt, layout: nil, scan: scan)
+            }
+        } catch { scanError = error }
+        let folder = try root(layoutsRoot)
+        var unreadableFiles = false
+        if FileManager.default.fileExists(atPath: folder.path) {
+            for file in try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil,
+                                                                      options: .skipsHiddenFiles)
+            where file.pathExtension == "json" {
+                do {
+                    let record = try decoder().decode(Record.self, from: Data(contentsOf: file))
+                    guard safeID(record.id), file.deletingPathExtension().lastPathComponent == record.id,
+                          !record.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                          record.name.count <= 60 else { throw RoomLibraryError.unreadable }
+                    try record.layout.validate()
+                    entries[record.id] = RoomLibraryEntry(id: record.id, name: record.name,
+                        updatedAt: record.updatedAt, layout: record.layout, scan: entries[record.id]?.scan)
+                } catch { unreadableFiles = true }
+            }
+        }
+        if entries.isEmpty && (scanError != nil || unreadableFiles) { throw RoomLibraryError.unreadable }
+        return entries.values.sorted {
+            $0.updatedAt == $1.updatedAt ? $0.id < $1.id : $0.updatedAt > $1.updatedAt
+        }
+    }
+
+    @discardableResult
+    static func saveNew(name: String, layout: RoomLayoutSnapshot, layoutsRoot: URL? = nil) throws -> String {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 60 else { throw RoomLibraryError.invalidName }
+        try layout.validate()
+        let id = UUID().uuidString
+        try write(Record(id: id, name: name, createdAt: Date(), updatedAt: Date(), layout: layout), to: root(layoutsRoot))
+        return id
+    }
+
+    static func saveExisting(id: String, layout: RoomLayoutSnapshot,
+                             scansRoot: URL? = nil, layoutsRoot: URL? = nil) throws {
+        try layout.validate()
+        guard safeID(id), let entry = try all(scansRoot: scansRoot, layoutsRoot: layoutsRoot).first(where: { $0.id == id }) else {
+            throw RoomLibraryError.roomNotFound
+        }
+        let folder = try root(layoutsRoot)
+        let previous = try? decoder().decode(Record.self, from: Data(contentsOf: folder.appendingPathComponent(id + ".json")))
+        try write(Record(id: id, name: entry.name,
+                         createdAt: previous?.createdAt ?? entry.scan?.document.capturedAt ?? entry.updatedAt,
+                         updatedAt: Date(), layout: layout), to: folder)
+    }
+
+    private static func write(_ record: Record, to folder: URL) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(record)
+        try data.write(to: folder.appendingPathComponent(record.id + ".json"), options: .atomic)
+    }
+
+    private static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}

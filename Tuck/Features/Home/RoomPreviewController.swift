@@ -1,0 +1,57 @@
+import SwiftUI
+import WebKit
+
+@MainActor
+final class RoomPreviewController: ObservableObject {
+    private weak var webView: WKWebView?
+    private var ready = false
+    private var moveEnabled = false
+    private var initialLayout: RoomLayoutSnapshot?
+
+    func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool) {
+        webView = view
+        ready = false
+        initialLayout = layout
+        self.moveEnabled = moveEnabled
+    }
+
+    func detach(_ view: WKWebView) {
+        guard webView === view else { return }
+        webView = nil
+        ready = false
+    }
+
+    func didLoad(_ view: WKWebView) async throws {
+        guard webView === view else { return }
+        if let initialLayout {
+            let data = try JSONEncoder().encode(initialLayout)
+            let json = String(decoding: data, as: UTF8.self)
+            _ = try await view.evaluateJavaScript("window.tuckEditor.loadLayout(\(json))")
+        }
+        ready = true
+        try await applyMoveMode()
+    }
+
+    func setMoveEnabled(_ enabled: Bool) {
+        guard moveEnabled != enabled else { return }
+        moveEnabled = enabled
+        guard ready else { return }
+        Task { try? await applyMoveMode() }
+    }
+
+    private func applyMoveMode() async throws {
+        guard let webView else { return }
+        _ = try await webView.evaluateJavaScript("window.tuckEditor.setFurnitureMoveEnabled(\(moveEnabled ? "true" : "false"))")
+    }
+
+    func snapshot() async throws -> RoomLayoutSnapshot {
+        guard ready, let webView else { throw RoomLibraryError.previewNotReady }
+        let value = try await webView.evaluateJavaScript("JSON.stringify(window.tuckEditor.layout())")
+        guard let json = value as? String, let data = json.data(using: .utf8) else {
+            throw RoomLibraryError.invalidLayout
+        }
+        let snapshot = try JSONDecoder().decode(RoomLayoutSnapshot.self, from: data)
+        try snapshot.validate()
+        return snapshot
+    }
+}
