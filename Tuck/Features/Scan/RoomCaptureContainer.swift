@@ -1,29 +1,47 @@
 import RoomPlan
 import SwiftUI
+import UIKit
 
 @MainActor
-struct RoomCaptureContainer: UIViewRepresentable {
+struct RoomCaptureContainer: UIViewControllerRepresentable {
     let scanner: RoomScanner
 
     func makeCoordinator() -> Coordinator {
         Coordinator(scanner: scanner, token: scanner.scanID)
     }
 
-    func makeUIView(context: Context) -> RoomCaptureView {
-        let view = RoomCaptureView(frame: .zero)
-        view.isModelEnabled = true
-        view.delegate = context.coordinator
-        view.captureSession.delegate = context.coordinator
-        scanner.attach(view)
-        return view
+    func makeUIViewController(context: Context) -> CaptureController {
+        let controller = CaptureController()
+        controller.captureView.isModelEnabled = false
+        controller.captureView.delegate = context.coordinator
+        controller.captureView.captureSession.delegate = context.coordinator
+        controller.onAppear = { [weak scanner] view in scanner?.attach(view) }
+        return controller
     }
 
-    func updateUIView(_ uiView: RoomCaptureView, context: Context) {}
+    func updateUIViewController(_ uiViewController: CaptureController, context: Context) {}
 
-    static func dismantleUIView(_ uiView: RoomCaptureView, coordinator: Coordinator) {
-        uiView.delegate = nil
-        uiView.captureSession.delegate = nil
-        uiView.captureSession.stop(pauseARSession: true)
+    static func dismantleUIViewController(_ controller: CaptureController, coordinator: Coordinator) {
+        controller.onAppear = nil
+        controller.captureView.delegate = nil
+        controller.captureView.captureSession.delegate = nil
+        controller.captureView.captureSession.stop(pauseARSession: true)
+    }
+
+    /// Start only once the camera view has a window and a laid-out size.
+    final class CaptureController: UIViewController {
+        let captureView = RoomCaptureView(frame: .zero)
+        var onAppear: ((RoomCaptureView) -> Void)?
+        private var didStart = false
+
+        override func loadView() { view = captureView }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            guard !didStart else { return }
+            didStart = true
+            onAppear?(captureView)
+        }
     }
 
     @MainActor
@@ -41,7 +59,7 @@ struct RoomCaptureContainer: UIViewRepresentable {
         // coordinator is never archived, so these only satisfy the conformance.
         nonisolated func encode(with coder: NSCoder) {}
 
-        nonisolated required init?(coder: NSCoder) { nil }
+        nonisolated required init?(coder: NSCoder) { return nil }
 
         // RoomPlan may invoke delegates off the main thread. Move state changes
         // to MainActor, and reject callbacks from a previous scan using token.

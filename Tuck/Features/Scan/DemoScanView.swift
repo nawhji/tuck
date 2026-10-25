@@ -5,7 +5,7 @@ import SwiftUI
 /// Figma scan flow. The finish destination is always the bundled demo room.
 @MainActor
 struct DemoScanView: View {
-    let onFinish: () -> Void
+    let onFinish: (SavedScan?) -> Void
     let onCancel: () -> Void
     @StateObject private var scanner = RoomScanner()
     @Environment(\.scenePhase) private var scenePhase
@@ -45,8 +45,12 @@ struct DemoScanView: View {
                             }
                         }
                     } else if scanner.phase == .failed {
-                        Text("Room scanning is unavailable. You can still open the demo room.")
-                            .font(.caption).foregroundStyle(.white.opacity(0.65))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(scanner.errorMessage ?? "Room scanning is unavailable. You can still open the demo room.")
+                                .font(.caption).foregroundStyle(.white.opacity(0.8))
+                            Button("Retry room scan") { Task { await startCamera() } }
+                                .font(.caption.weight(.medium)).foregroundStyle(.white)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -72,15 +76,15 @@ struct DemoScanView: View {
             if phase == .active {
                 guard !isFinishing else { return }
                 Task { await startCamera() }
-            } else {
+            } else if phase == .background {
                 cameraActive = false
-                scanner.stop()
+                scanner.cancel()
             }
         }
         .onDisappear {
             cameraActive = false
             finishTask?.cancel()
-            scanner.stop()
+            scanner.cancel()
         }
     }
 
@@ -88,7 +92,7 @@ struct DemoScanView: View {
         if cameraAllowed && cameraActive {
             if supportsLiDAR && scanner.showsCapture {
                 RoomCaptureContainer(scanner: scanner).id(scanner.scanID)
-            } else if !supportsLiDAR || scanner.phase == .failed {
+            } else if !supportsLiDAR {
                 PlainCameraPreview { cameraMessage = $0 }
             }
         }
@@ -148,7 +152,10 @@ struct DemoScanView: View {
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 24).padding(.top, 10).padding(.bottom, 18)
-        .background(.white, in: UnevenRoundedRectangle(topLeadingRadius: 25, topTrailingRadius: 25))
+        .background {
+            UnevenRoundedRectangle(topLeadingRadius: 25, topTrailingRadius: 25)
+                .fill(.white).ignoresSafeArea(.container, edges: .bottom)
+        }
     }
 
     private func startCamera() async {
@@ -178,8 +185,8 @@ struct DemoScanView: View {
         finishTask = Task {
             // Give real RoomPlan a bounded opportunity to finish; never block the demo on it.
             if supportsLiDAR {
-                for _ in 0..<25 {
-                    if scanner.phase == .ready || scanner.phase == .failed { break }
+                for _ in 0..<80 {
+                    if scanner.phase == .failed || (scanner.phase == .ready && !scanner.isSaving) { break }
                     do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
                 }
             } else {
@@ -187,7 +194,11 @@ struct DemoScanView: View {
             }
             guard !Task.isCancelled else { return }
             cameraActive = false
-            onFinish()
+            let saved: SavedScan?
+            if let document = scanner.document, let files = scanner.files {
+                saved = SavedScan(document: document, files: files)
+            } else { saved = nil }
+            onFinish(saved)
         }
     }
 }

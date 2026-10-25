@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var model: HomeViewModel
+    @State private var showsSavedRoom = false
     @GestureState private var dragOffset: CGFloat = 0
     @FocusState private var isInputFocused: Bool
 
@@ -20,9 +21,21 @@ struct HomeView: View {
         }
         .animation(.spring(duration: 0.35), value: isInputFocused)
         .preferredColorScheme(.light)
+        .task { await model.restoreLatestScan() }
+        .sheet(isPresented: $showsSavedRoom) {
+            if let scan = model.savedScan { SavedRoomView(scan: scan) }
+        }
+        .alert("Saved room", isPresented: Binding(
+            get: { model.scanLoadError != nil },
+            set: { if !$0 { model.scanLoadError = nil } }
+        )) { Button("OK", role: .cancel) { model.scanLoadError = nil } }
+        message: { Text(model.scanLoadError ?? "") }
         .fullScreenCover(isPresented: $model.isPresentingScan) {
             DemoScanView(
-                onFinish: { model.finishDemoScan() },
+                onFinish: { scan in
+                    if let scan { model.acceptScan(document: scan.document, files: scan.files) }
+                    model.finishDemoScan()
+                },
                 onCancel: { model.isPresentingScan = false }
             )
         }
@@ -35,7 +48,7 @@ struct HomeView: View {
     private var stage: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
-                RoomStageView(hasScannedSpace: model.hasScannedSpace, onScanTap: model.startScan)
+                RoomStageView(hasScannedSpace: model.hasScannedSpace, onScanTap: model.startScan, onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true })
                     .position(x: proxy.size.width / 2, y: stageCenterY(safeTop: proxy.safeAreaInsets.top))
                 HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile)
                     .padding(.top, max(proxy.safeAreaInsets.top + 2, 0))

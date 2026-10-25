@@ -5,7 +5,7 @@ header{right:32px}canvas{width:100vw;height:calc(100vh - 205px)}.chat{width:calc
 /* Native SwiftUI owns the header and chat; the web view is the room only. */
 body{background:#ffffff!important}canvas{width:100vw!important;height:100dvh!important}
 header,.chat,.caption,.mobileTools,.panel{display:none!important}
-</style>
+#axisIndicator{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 12px;border-radius:18px;background:#34383ce8;color:white;font:600 11px -apple-system,sans-serif;pointer-events:none;z-index:10}#axisIndicator[hidden]{display:none}</style>
 <canvas id="c" aria-label="3D room preview"></canvas><header><h1>Tuck</h1><span class="avatar">H</span></header><div class="chat" id="chat"><button id="chatHandle" aria-label="Collapse chat panel"><span></span></button><div class="chatTitle">Harper’s Room</div><div class="bubble">Explore your room from every angle.</div><div class="chatHint">Drag to orbit · Pinch to zoom</div><div class="chatInput">Any new ideas? <span>↑</span></div></div>
 <div class="caption">Each piece is a separate object.<br>USDZ · GLB Individual assets and layout JSON included</div>
 <script>
@@ -25,7 +25,7 @@ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float unpackDepth(vec3 c){return dot(c,vec3(1.,1./255.,1./65025.));}
 float visibility(vec3 normal){vec3 q=vShadow.xyz/vShadow.w*.5+.5;if(q.x<0.||q.x>1.||q.y<0.||q.y>1.||q.z<0.||q.z>1.)return 1.;float bias=max(.0007,.002*(1.-max(dot(normal,normalize(vec3(-3.,6.,4.))),0.)));float shade=0.;for(int x=-2;x<=2;x++)for(int y=-2;y<=2;y++){vec2 off=vec2(float(x),float(y))*(1.5/2048.);float d=unpackDepth(texture2D(uShadow,q.xy+off).rgb);shade+=q.z-bias<=d?1.:0.;}return shade/25.;}
-void main(){vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;vec3 base=uColor;vec2 uv=abs(n.y)>.6?vWorld.xz:(abs(n.x)>.6?vWorld.zy:vWorld.xy);
+void main(){if(uKind>4.5){float light=.65+.35*max(dot(normalize(vNormal),normalize(vec3(-.4,.85,.35))),0.);gl_FragColor=vec4(uColor*light,1.);return;}vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;vec3 base=uColor;vec2 uv=abs(n.y)>.6?vWorld.xz:(abs(n.x)>.6?vWorld.zy:vWorld.xy);
 if(uKind>.5&&uKind<1.5){float grain=noise(vec2(uv.x*5.+sin(uv.y*2.)*.35,uv.y*120.));float fine=noise(uv*vec2(20.,600.));base*=.94+.065*grain+.035*fine;}
 if(uKind>1.5&&uKind<2.5){float weave=sin(uv.x*800.)*sin(uv.y*800.);base*=.975+.018*weave+.025*noise(uv*90.);}
 vec3 l=normalize(vec3(-3.,6.,4.)),v=normalize(uEye-vWorld),h=normalize(l+v);float diff=max(dot(n,l),0.),shadow=visibility(n);float hemi=mix(.63,.94,n.y*.5+.5);vec3 light=vec3(1.02,1.0,.95)*hemi+vec3(1.0,.97,.89)*diff*.63*shadow;
@@ -76,10 +76,55 @@ function world(v,i){let c=Math.cos(i.yawRadians),s=Math.sin(i.yawRadians);return
 function triangleHit(r,a,b,c){let e1=sub(b,a),e2=sub(c,a),p=cross(r.dir,e2),det=dot(e1,p);if(Math.abs(det)<1e-8)return Infinity;let t=sub(r.origin,a),u=dot(t,p)/det;if(u<0||u>1)return Infinity;let q=cross(t,e1),v=dot(r.dir,q)/det;if(v<0||u+v>1)return Infinity;let d=dot(e2,q)/det;return d>.001?d:Infinity}
 function pick(r){let best=null,dist=Infinity;for(let i of items)for(let p of assetMap.get(i.assetId).parts)for(let f of p.faces)for(let k=1;k<f.length-1;k++){let d=triangleHit(r,...[f[0],f[k],f[k+1]].map(j=>world(p.vertices[j],i)));if(d<dist){dist=d;best=i}}return best?{item:best,point:r.origin.map((v,k)=>v+dist*r.dir[k])}:null}
 function plane(r,height){if(Math.abs(r.dir[1])<1e-5)return null;let t=(height-r.origin[1])/r.dir[1];return t>0?r.origin.map((v,k)=>v+t*r.dir[k]):null}
-const pointers=new Map();let dragging=null,lastPinch=null;
-canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,[e.clientX,e.clientY]);lastPinch=null;if(pointers.size>1){dragging=null;return}let hit=pick(ray(e.clientX,e.clientY));if(hit){selected=hit.item.instanceId;sync();if(mode==='move')dragging={id:selected,height:hit.point[1],offset:[hit.point[0]-hit.item.position[0],hit.point[2]-hit.item.position[2]]}}});
-canvas.addEventListener('pointermove',e=>{let old=pointers.get(e.pointerId);if(!old)return;pointers.set(e.pointerId,[e.clientX,e.clientY]);if(pointers.size>1){let a=[...pointers.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);if(lastPinch&&d>0)radius=Math.max(3.4,Math.min(15,radius*lastPinch/d));lastPinch=d}else if(dragging){let i=items.find(i=>i.instanceId===dragging.id),p=plane(ray(e.clientX,e.clientY),dragging.height);if(i&&p){i.position[0]=p[0]-dragging.offset[0];i.position[2]=p[2]-dragging.offset[1];sync()}}else{yaw-=(e.clientX-old[0])*.009;pitch=Math.max(.12,Math.min(1.48,pitch+(e.clientY-old[1])*.007))}dirty=true});
-for(let name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>{pointers.delete(e.pointerId);dragging=null;lastPinch=null});
+// World-axis movement. The furniture's geometric center is a hidden pivot.
+const axisVectors=[[1,0,0],[0,1,0],[0,0,1]],axisNames=['X','Y','Z'];
+let activeAxis=null,activeDirection=1,pinchGesture=false;
+const axisBadge=document.getElementById('axisIndicator');
+function boundsCenter(item){const a=assetMap.get(item.assetId);if(!a.localCenter){const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(const p of a.parts)for(const v of p.vertices)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],v[k]);hi[k]=Math.max(hi[k],v[k])}a.localCenter=lo.map((v,k)=>(v+hi[k])/2)}return world(a.localCenter,item)}
+function project(point){const rect=canvas.getBoundingClientRect(),eye=camera(),f=norm(sub([0,.95,0],eye)),right=norm(cross(f,[0,1,0])),up=cross(right,f),d=sub(point,eye),depth=dot(d,f),t=Math.tan(.73/2);if(depth<=.05)return null;return[rect.left+rect.width/2+dot(d,right)*rect.height/(2*t*depth),rect.top+rect.height/2-dot(d,up)*rect.height/(2*t*depth)]}
+function screenAxis(center,axis){const v=axisVectors[axis],a=project(center.map((p,k)=>p-v[k]*.5)),b=project(center.map((p,k)=>p+v[k]*.5));if(!a||!b)return null;const delta=[b[0]-a[0],b[1]-a[1]],length=Math.hypot(...delta);return length>=8?{delta,length,unit:delta.map(x=>x/length)}:null}
+function inferAxis(center,dx,dy){const length=Math.hypot(dx,dy);if(length<9)return null;let best=null,score=-1;for(let axis=0;axis<3;axis++){const s=screenAxis(center,axis);if(!s)continue;const alignment=Math.abs((dx*s.unit[0]+dy*s.unit[1])/length);if(alignment>score){score=alignment;best=axis}}return best}
+function axisParameter(pointerRay,center,axis){const direction=axisVectors[axis],w=sub(center,pointerRay.origin),b=dot(direction,pointerRay.dir),denom=1-b*b;if(denom<.003)return null;return(b*dot(pointerRay.dir,w)-dot(direction,w))/denom}
+function showAxis(axis){activeAxis=axis;if(axisBadge){axisBadge.hidden=axis===null;axisBadge.textContent=axis===null?'':'Move '+axisNames[axis]}dirty=true}
+function arrowPart(axis){const vertices=[],faces=[],a=axisVectors[axis],b=axisVectors[(axis+1)%3],c=axisVectors[(axis+2)%3],N=24;
+ function ring(t,r){const first=vertices.length;for(let k=0;k<N;k++){const angle=k*2*Math.PI/N;vertices.push(a.map((v,j)=>v*t+b[j]*Math.cos(angle)*r+c[j]*Math.sin(angle)*r))}return first}
+ const start=ring(0,.012),end=ring(.84,.012),head=ring(.84,.035),tip=vertices.length;vertices.push([...a]);
+ for(let k=0;k<N;k++){const j=(k+1)%N;faces.push([start+k,start+j,end+j,end+k],[head+k,head+j,tip],[head+j,head+k,end+k,end+j])}
+ faces.push(Array.from({length:N},(_,i)=>start+N-1-i));
+ for(const face of faces){const pts=face.map(i=>vertices[i]),n=cross(sub(pts[1],pts[0]),sub(pts[2],pts[0])),center=pts[0].map((_,i)=>pts.reduce((sum,p)=>sum+p[i],0)/pts.length),radial=center.map((v,i)=>v-a[i]*dot(center,a));const want=Math.hypot(...radial)>.0001?radial:a.map(v=>-v);if(dot(n,want)<0)face.reverse()}
+ return{name:'MovementArrow'+axisNames[axis],vertices,faces,color:[.27,.29,.31],wall:null,materialKind:5,roughness:.9}
+}
+const arrowObjects=axisVectors.map((_,axis)=>[upload(arrowPart(axis))]);
+function furnitureAxisLengths(item){const asset=assetMap.get(item.assetId);if(asset.axisExtentCache?.yaw===item.yawRadians)return asset.axisExtentCache.lengths;const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity],rotated={position:[0,0,0],yawRadians:item.yawRadians};for(const part of asset.parts)for(const vertex of part.vertices){const point=world(vertex,rotated);for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],point[k]);hi[k]=Math.max(hi[k],point[k])}}const lengths=lo.map((v,k)=>hi[k]-v);asset.axisExtentCache={yaw:item.yawRadians,lengths};return lengths}
+function gizmoTransform(){const item=chosen();if(!item||activeAxis===null)return null;const center=boundsCenter(item),axisLength=furnitureAxisLengths(item)[activeAxis],scale=axisLength*.6;if(!(scale>0))return null;const screen=screenAxis(center,activeAxis),normal=screen?[-screen.unit[1],screen.unit[0]]:[1,0],otherAxes=[0,1,2].filter(k=>k!==activeAxis),projectedWidths=otherAxes.map(k=>{const v=axisVectors[k],a=project(center.map((p,j)=>p-v[j]*.5)),b=project(center.map((p,j)=>p+v[j]*.5));return a&&b?(b[0]-a[0])*normal[0]+(b[1]-a[1])*normal[1]:0}),pixelsPerMeter=Math.hypot(...projectedWidths),crossScale=pixelsPerMeter>1e-6?2.5/(.024*pixelsPerMeter):1,sizes=[crossScale,crossScale,crossScale];sizes[activeAxis]=scale*activeDirection;return{center,scale,crossScale,shaftPixels:2.5,axisLength,direction:activeDirection,matrix:new Float32Array([sizes[0],0,0,0,0,sizes[1],0,0,0,0,sizes[2],0,...center,1])}}
+function drawAxisGizmo(eye){const g=gizmoTransform();if(!g)return;gl.clear(gl.DEPTH_BUFFER_BIT);draw(arrowObjects[activeAxis],g.matrix,eye)}
+const pointers=new Map();let dragging=null,lastPinch=null,orbitStart=null;
+canvas.addEventListener('pointerdown',e=>{
+ canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,[e.clientX,e.clientY]);lastPinch=null;
+ if(pointers.size>1){dragging=null;orbitStart=null;pinchGesture=true;showAxis(null);return}
+ pinchGesture=false;const hit=pick(ray(e.clientX,e.clientY));showAxis(null);
+ if(hit){selected=hit.item.instanceId;const center=boundsCenter(hit.item);dragging={id:selected,start:[e.clientX,e.clientY],position:[...hit.item.position],center,axis:null,startParameter:null};orbitStart=null;canvas.style.cursor='grabbing';sync()}
+ else{dragging=null;orbitStart=[e.clientX,e.clientY]}
+});
+canvas.addEventListener('pointermove',e=>{
+ const old=pointers.get(e.pointerId);if(!old)return;pointers.set(e.pointerId,[e.clientX,e.clientY]);
+ if(pointers.size>1){const a=[...pointers.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);if(lastPinch&&d>0)radius=Math.max(3.4,Math.min(15,radius*lastPinch/d));lastPinch=d}
+ else if(pinchGesture){return}
+ else if(dragging){
+  const item=items.find(i=>i.instanceId===dragging.id);if(!item)return;const dx=e.clientX-dragging.start[0],dy=e.clientY-dragging.start[1];
+  if(dragging.axis===null){const axis=inferAxis(dragging.center,dx,dy);if(axis===null)return;dragging.axis=axis;dragging.startParameter=axisParameter(ray(...dragging.start),dragging.center,axis);showAxis(axis)}
+  const axis=dragging.axis,current=axisParameter(ray(e.clientX,e.clientY),dragging.center,axis);let distance;
+  if(current!==null&&dragging.startParameter!==null)distance=current-dragging.startParameter;
+  else{const s=screenAxis(dragging.center,axis);if(!s)return;distance=(dx*s.unit[0]+dy*s.unit[1])/s.length}
+  if(Number.isFinite(distance)){if(dragging.previousDistance===undefined&&Math.abs(distance)>1e-5)activeDirection=Math.sign(distance);dragging.previousDistance=distance;item.position=[...dragging.position];item.position[axis]+=distance;sync()}
+ }else{yaw-=(e.clientX-old[0])*.009;pitch=Math.max(.12,Math.min(1.48,pitch+(e.clientY-old[1])*.007))}
+ dirty=true;
+});
+for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,e=>{
+ if(!pointers.has(e.pointerId))return;
+ if(name==='pointerup'&&orbitStart&&!pinchGesture&&Math.hypot(e.clientX-orbitStart[0],e.clientY-orbitStart[1])<9){selected=null;showAxis(null);sync()}
+ pointers.delete(e.pointerId);dragging=null;orbitStart=null;lastPinch=null;canvas.style.cursor='default';if(name==='pointercancel')showAxis(null);if(!pointers.size)pinchGesture=false;dirty=true;
+});
 canvas.addEventListener('wheel',e=>{e.preventDefault();radius=Math.max(3.4,Math.min(15,radius*Math.exp(e.deltaY*.001)));dirty=true},{passive:false});
 $('reverse').onclick=()=>{yaw=.78;pitch=.65;dirty=true};$('top').onclick=()=>{pitch=1.35;dirty=true};
 $('walls').onclick=e=>{autoWalls=!autoWalls;e.target.classList.toggle('active',autoWalls);dirty=true};$('roof').onclick=e=>{showRoof=!showRoof;e.target.classList.toggle('active',showRoof);dirty=true};$('reset').onclick=()=>{yaw=-.72;pitch=.62;radius=7.5;dirty=true};
@@ -95,8 +140,11 @@ const shadowBuffer=gl.createFramebuffer(),shadowDepth=gl.createRenderbuffer();gl
 function hidden(p,eye){return(p.wall==='roof'&&!showRoof)||(autoWalls&&p.wall&&((p.wall==='front'&&eye[2]>0)||(p.wall==='back'&&eye[2]<0)||(p.wall==='left'&&eye[0]<0)||(p.wall==='right'&&eye[0]>0)))}
 function shadowDraw(objects,m,eye){gl.uniformMatrix4fv(sud,false,m);for(let p of objects){if(hidden(p,eye)||p.materialKind===4)continue;gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(sap);gl.vertexAttribPointer(sap,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
 function render(){if(dirty){dirty=false;let eye=camera();gl.bindFramebuffer(gl.FRAMEBUFFER,shadowBuffer);gl.viewport(0,0,2048,2048);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(shadowProgram);gl.disableVertexAttribArray(an);gl.uniformMatrix4fv(sul,false,lightMatrix);shadowDraw(roomObjects,identity,eye);for(let i of items)shadowDraw(assetMap.get(i.assetId).objects,model(i),eye);
-gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.976,.973,.961,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,[0,.95,0])));draw(roomObjects,identity,eye);for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected)}requestAnimationFrame(render)}
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.976,.973,.961,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,[0,.95,0])));draw(roomObjects,identity,eye);for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected);drawAxisGizmo(eye)}requestAnimationFrame(render)}
 // Open directly into the furnished scene so visual quality is immediately visible.
 for(let a of assets)if(!a.optional)add(a.id);selected=null;sync();message('Your room is ready. Drag to explore.');render();
-window.tuckEditor={add,layout,loadLayout,select:id=>{selected=id;sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model};
+window.tuckEditor={add,layout,loadLayout,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
+project,boundsCenter,screenAxis,inferAxis,axisParameter,gizmoTransform,furnitureAxisLengths,
+interactionState:()=>({selected,axis:activeAxis,direction:activeDirection,dragging:dragging?{id:dragging.id,axis:dragging.axis}:null,camera:{yaw,pitch,radius}}),
+setCamera:(y,p,r)=>{yaw=y;pitch=p;radius=r;showAxis(null);dirty=true}};
 </script></html>

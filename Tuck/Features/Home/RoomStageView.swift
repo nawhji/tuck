@@ -4,12 +4,19 @@ import WebKit
 struct RoomStageView: View {
     let hasScannedSpace: Bool
     let onScanTap: () -> Void
+    var onViewScan: (() -> Void)? = nil
 
     var body: some View {
         if hasScannedSpace {
-            DemoRoomPreview()
-                .frame(width: min(UIScreen.main.bounds.width - 24, 480), height: 340)
-                .accessibilityLabel("Demo room. Drag to rotate, or use furniture tools to move items.")
+            VStack(spacing: 4) {
+                DemoRoomPreview()
+                    .frame(width: min(UIScreen.main.bounds.width - 24, 480), height: 310)
+                    .accessibilityLabel("Demo room. Drag to rotate and move furniture.")
+                if let onViewScan {
+                    Button("View measurements", action: onViewScan)
+                        .font(.caption.weight(.medium))
+                }
+            }
         } else {
             Button(action: onScanTap) {
                 VStack(spacing: 14) {

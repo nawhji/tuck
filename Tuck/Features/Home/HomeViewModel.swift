@@ -15,6 +15,8 @@ final class HomeViewModel {
 
     var hasScannedSpace = false
     var isPresentingScan = false
+    var savedScan: SavedScan?
+    var scanLoadError: String?
     var isSimulating = false
     var messages: [ChatMessage] = []
     var draft = ""
@@ -38,6 +40,19 @@ final class HomeViewModel {
         hasScannedSpace = true
         sheetDetent = .collapsed
         isPresentingScan = false
+    }
+    func acceptScan(document: RoomDocument, files: ScanFiles) {
+        savedScan = SavedScan(document: document, files: files)
+        hasScannedSpace = true
+    }
+
+    @MainActor
+    func restoreLatestScan() async {
+        do {
+            let scan = try await Task.detached(priority: .userInitiated) { try ScanStore.latest() }.value
+            guard !Task.isCancelled, savedScan == nil, let scan else { return }
+            acceptScan(document: scan.document, files: scan.files)
+        } catch { scanLoadError = error.localizedDescription }
     }
     func openProfile() { /* TODO: Profile 화면으로 이동 */ }
 

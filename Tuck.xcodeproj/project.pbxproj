@@ -26,6 +26,9 @@
 		B10000000000000000000008 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* ChatMessage.swift */; };
 		B10000000000000000000010 /* ClaudeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ClaudeClient.swift */; };
 		B10000000000000000000011 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* Secrets.swift */; };
+		C10000000000000000000030 /* ScanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000030 /* ScanStore.swift */; };
+		C10000000000000000000031 /* SavedRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000031 /* SavedRoomView.swift */; };
+D00000000000000000000002 = {isa = PBXBuildFile; fileRef = D00000000000000000000001; };
 		B10000000000000000000020 /* ProductCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ProductCatalog.swift */; };
 		B10000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */; };
 		B10000000000000000000090 /* TuckAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000090 /* TuckAvatar.swift */; };
@@ -57,6 +60,10 @@
 		B00000000000000000000008 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* ClaudeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeClient.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		C00000000000000000000030 /* ScanStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStore.swift; sourceTree = "<group>"; };
+		C00000000000000000000031 /* SavedRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRoomView.swift; sourceTree = "<group>"; };
+D00000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanTests.swift; sourceTree = "<group>"; };
+D00000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = TuckTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000020 /* ProductCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCatalog.swift; sourceTree = "<group>"; };
 		B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */ = {isa = PBXFileReference; lastKnownFileType = text; name = "TUCK_Product_Catalog - 시트1.csv"; path = "data/TUCK_Product_Catalog - 시트1.csv"; sourceTree = SOURCE_ROOT; };
 		B00000000000000000000090 /* TuckAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuckAvatar.swift; sourceTree = "<group>"; };
@@ -73,12 +80,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+D00000000000000000000007 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A00000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
+D00000000000000000000005,
 				A00000000000000000000004 /* Tuck */,
 				A0000000000000000000006B /* README.md */,
 				A00000000000000000000003 /* Products */,
@@ -88,6 +97,7 @@
 		A00000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+D00000000000000000000003,
 				A00000000000000000000006 /* Tuck.app */,
 			);
 			name = Products;
@@ -126,6 +136,7 @@
 		A00000000000000000000072 /* Scan */ = {
 			isa = PBXGroup;
 			children = (
+				C00000000000000000000031 /* SavedRoomView.swift */,
 				A00000000000000000000065 /* ScanView.swift */,
 				C30000000000000000000011 /* DemoScanView.swift */,
 				A00000000000000000000067 /* RoomCaptureContainer.swift */,
@@ -146,6 +157,7 @@
 		A00000000000000000000074 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C00000000000000000000030 /* ScanStore.swift */,
 				B00000000000000000000011 /* Secrets.swift */,
 				B00000000000000000000010 /* ClaudeClient.swift */,
 				B00000000000000000000020 /* ProductCatalog.swift */,
@@ -190,6 +202,7 @@
 			path = Home;
 			sourceTree = "<group>";
 		};
+D00000000000000000000005 = {isa = PBXGroup; children = (D00000000000000000000001,); path = TuckTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -210,7 +223,16 @@
 			productReference = A00000000000000000000006 /* Tuck.app */;
 			productType = "com.apple.product-type.application";
 		};
+D00000000000000000000004 /* TuckTests */ = {isa = PBXNativeTarget; buildConfigurationList = D0000000000000000000000B; buildPhases = (D00000000000000000000006, D00000000000000000000007, D00000000000000000000008,); buildRules = (); dependencies = (D0000000000000000000000A,); name = TuckTests; productName = TuckTests; productReference = D00000000000000000000003; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+D00000000000000000000009 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000005; remoteInfo = Tuck; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+D0000000000000000000000A = {isa = PBXTargetDependency; target = A00000000000000000000005; targetProxy = D00000000000000000000009; };
+/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		A00000000000000000000001 /* Project object */ = {
@@ -238,6 +260,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+D00000000000000000000004,
 				A00000000000000000000005 /* Tuck */,
 			);
 		};
@@ -255,6 +278,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+D00000000000000000000008 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -262,6 +286,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C10000000000000000000031 /* SavedRoomView.swift in Sources */,
+				C10000000000000000000030 /* ScanStore.swift in Sources */,
 				A000000000000000000000C8 /* TuckApp.swift in Sources */,
 				A000000000000000000000C9 /* ScanView.swift in Sources */,
 				C30000000000000000000001 /* DemoScanView.swift in Sources */,
@@ -286,6 +312,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+D00000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D00000000000000000000002,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -295,6 +322,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
@@ -368,6 +396,8 @@
 			};
 			name = Release;
 		};
+D0000000000000000000000C = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",); PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tuck.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tuck"; }; name = Debug; };
+D0000000000000000000000D = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",); PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tuck.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tuck"; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -389,6 +419,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+D0000000000000000000000B = {isa = XCConfigurationList; buildConfigurations = (D0000000000000000000000C, D0000000000000000000000D,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;
