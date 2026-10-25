@@ -9,7 +9,8 @@ struct ChatSheet<Drag: Gesture>: View {
     let canSend: Bool
     let dragGesture: Drag
     let onSend: () -> Void
-    let onImage: () -> Void
+    let isResponding: Bool
+    let onStop: () -> Void
     let onSelect: (Product) -> Void
     let onOrder: (CheckoutCard) -> Void
 
@@ -58,7 +59,8 @@ struct ChatSheet<Drag: Gesture>: View {
                     isFocused: isInputFocused,
                     canSend: canSend,
                     onSend: onSend,
-                    onImage: onImage
+                    isResponding: isResponding,
+                    onStop: onStop
                 )
                 .padding(.bottom, 8)
             }

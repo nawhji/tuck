@@ -74,7 +74,12 @@ final class HomeViewModel {
     private var lastCheckpoint = Date.distantPast
     private var streamingReplyID: UUID?
 
-    init(historyDirectory: URL? = nil) {
+    typealias ResponseStream = ([ClaudeClient.Turn], RoomChatContext?) -> AsyncThrowingStream<String, Error>
+    private let responseStream: ResponseStream?
+    private var pendingUserText: String?
+
+    init(historyDirectory: URL? = nil, responseStream: ResponseStream? = nil) {
+        self.responseStream = responseStream
         historyStore = RoomChatStore(directory: historyDirectory)
         do { messages = try historyStore.load("no-room"); rebuildCards() }
         catch { chatStorageError = error.localizedDescription }
@@ -101,6 +106,7 @@ final class HomeViewModel {
         interruptReply()
         responseID = UUID()
         isResponding = false
+        pendingUserText = nil
         persistChat()
         streamingReplyID = nil
         let key = "saved:" + id
@@ -139,6 +145,7 @@ final class HomeViewModel {
         interruptReply()
         responseID = UUID()
         isResponding = false
+        pendingUserText = nil
         if let last = messages.last, last.role == .assistant, last.rawText.isEmpty { messages.removeLast() }
         persistChat()
         streamingReplyID = nil
@@ -260,19 +267,42 @@ final class HomeViewModel {
         isProfilePresented = true
     }
 
+    /// Manual stop only. Inactive/background transitions continue to persist chat.
+    func stopResponding() {
+        guard isResponding else { return }
+        responseTask?.cancel()
+        responseTask = nil
+        responseID = UUID() // Reject late chunks/errors and the old task's defer.
+        if let pendingUserText {
+            messages.append(ChatMessage(role: .user, text: pendingUserText))
+            messages.append(ChatMessage(role: .assistant, text: "Response stopped.", blocks: [.text("Response stopped.")]))
+        } else if let id = streamingReplyID, let index = messages.firstIndex(where: { $0.id == id }) {
+            let marker = messages[index].rawText.isEmpty ? "Response stopped." : "\n\n[Response stopped.]"
+            messages[index].rawText += marker
+            messages[index].blocks = blocks(from: messages[index].rawText)
+        }
+        pendingUserText = nil
+        streamingReplyID = nil
+        isResponding = false
+        persistChat()
+    }
+
     func send(contextProvider: (() async throws -> RoomChatContext)? = nil) {
-        // 실수로 입력한 카드 번호는 모델·대화 이력에 남기지 않는다.
         let text = CardNumberRedactor.redact(draft.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !text.isEmpty, !isResponding else { return }
         let generation = roomGeneration
         let requestID = UUID()
         responseID = requestID
         let requiresRoom = hasScannedSpace
+        let selectedProductAtRequest = selectedProductID
+        let productContext = placedProductContext
+        pendingUserText = text
         draft = ""
         isResponding = true
         responseTask = Task { [client] in
             defer {
                 if responseID == requestID {
+                    pendingUserText = nil
                     streamingReplyID = nil
                     persistChat()
                     isResponding = false
@@ -291,25 +321,27 @@ final class HomeViewModel {
                 try Task.checkCancellation()
                 guard generation == roomGeneration, responseID == requestID else { return }
                 messages.append(ChatMessage(role: .user, text: text))
+                pendingUserText = nil
                 persistChat()
                 var turns = messages.map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
-                // 모델이 어떤 가구를 말하는지 알 수 있도록 방에 놓인 상품을 마지막 질문에 덧붙인다. (화면에는 보이지 않는다)
                 if let last = turns.last {
-                    turns[turns.count - 1] = .init(role: last.role, text: last.text + "\n\n" + placedProductContext)
+                    turns[turns.count - 1] = .init(role: last.role, text: last.text + "\n\n" + productContext)
                 }
                 let reply = ChatMessage(role: .assistant, text: "")
                 replyID = reply.id
                 streamingReplyID = reply.id
                 messages.append(reply)
                 lastCheckpoint = .distantPast
-                for try await chunk in client.stream(turns, roomContext: context) {
+                let stream = responseStream?(turns, context) ?? client.stream(turns, roomContext: context)
+                for try await chunk in stream {
                     try Task.checkCancellation()
                     guard generation == roomGeneration, responseID == requestID else { return }
                     append(chunk, to: reply.id)
                 }
+                try Task.checkCancellation()
                 guard generation == roomGeneration, responseID == requestID else { return }
                 if let intent = rawText(of: reply.id).flatMap(ReplyParser.buyIntent(in:)) {
-                    await startCheckout(for: selectedProductID, intent: intent, attachingTo: reply.id)
+                    await startCheckout(for: selectedProductAtRequest, intent: intent, attachingTo: reply.id)
                 }
             } catch is CancellationError {
             } catch {
@@ -325,8 +357,8 @@ final class HomeViewModel {
     }
 
     private var placedProductContext: String {
-        let detail = selectedProductID.map { "the product currently placed in the room has catalog id \($0)" }
-            ?? "no product is placed in the room right now"
+        let detail = selectedProductID.map { "the catalog product selected at the time of this request has id \($0)" }
+            ?? "no catalog product is selected for this request"
         return "[app context, not typed by the user: \(detail)]"
     }
 

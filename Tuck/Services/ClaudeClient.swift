@@ -107,6 +107,7 @@ struct ClaudeClient {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    try Task.checkCancellation()
                     let request = try makeRequest(turns, roomContext: roomContext)
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     if let http = response as? HTTPURLResponse, http.statusCode != 200 {
@@ -115,6 +116,7 @@ struct ClaudeClient {
                         throw ClientError.http(status: http.statusCode, message: Self.errorMessage(in: body))
                     }
                     for try await line in bytes.lines {
+                        try Task.checkCancellation()
                         guard line.hasPrefix("data:"),
                               let data = line.dropFirst(5).trimmingCharacters(in: .whitespaces).data(using: .utf8),
                               let event = try? JSONDecoder().decode(StreamEvent.self, from: data)

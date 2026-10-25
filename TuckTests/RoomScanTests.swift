@@ -737,3 +737,97 @@ extension SaveBeforeScanTests {
         XCTAssertEqual(restarted.messages[0].rawText, "Complete reply")
     }
 }
+
+@MainActor
+final class StopResponseTests: XCTestCase {
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        for _ in 0..<200 {
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        XCTFail("Timed out waiting for local response state")
+    }
+    func testStopBeforeTaskStartsKeepsQuestionAndShowsStopText() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        var requests = 0
+        let model = HomeViewModel(historyDirectory: folder, responseStream: { _, _ in
+            requests += 1
+            return AsyncThrowingStream { $0.finish() }
+        })
+        model.draft = "Find me a chair"
+        model.send()
+        model.stopResponding()
+        try await Task.sleep(for: .milliseconds(10))
+        XCTAssertFalse(model.isResponding)
+        XCTAssertEqual(requests, 0)
+        XCTAssertEqual(model.messages.first?.rawText, "Find me a chair")
+        XCTAssertEqual(model.messages.last?.blocks, [.text("Response stopped.")])
+    }
+    func testStopRetainsPartialTextAndRejectsLateChunks() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        var output: AsyncThrowingStream<String, Error>.Continuation!
+        let stream = AsyncThrowingStream<String, Error> { output = $0 }
+        var started = false
+        let model = HomeViewModel(historyDirectory: folder, responseStream: { _, _ in started = true; return stream })
+        model.draft = "Help"
+        model.send()
+        try await waitUntil { started }
+        output.yield("First part")
+        try await waitUntil { model.messages.last?.rawText == "First part" }
+        model.draft = "My next question"
+        model.stopResponding()
+        let saved = model.messages.last?.rawText
+        model.stopResponding()
+        output.yield(" LATE CHUNK")
+        output.finish()
+        try await Task.sleep(for: .milliseconds(10))
+        XCTAssertEqual(model.messages.last?.rawText, saved)
+        XCTAssertTrue(saved?.contains("First part") == true)
+        XCTAssertTrue(saved?.contains("Response stopped") == true)
+        XCTAssertEqual(model.draft, "My next question")
+        XCTAssertTrue(model.canSend)
+        let restarted = HomeViewModel(historyDirectory: folder)
+        XCTAssertEqual(restarted.messages.last?.rawText, saved)
+    }
+    func testStoppingBeforeFirstTokenDoesNotLeaveLoadingBubble() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        var output: AsyncThrowingStream<String, Error>.Continuation!
+        let stream = AsyncThrowingStream<String, Error> { output = $0 }
+        let model = HomeViewModel(historyDirectory: folder, responseStream: { _, _ in stream })
+        model.draft = "Help"
+        model.send()
+        try await waitUntil { model.messages.count == 2 }
+        model.stopResponding()
+        XCTAssertFalse(model.isResponding)
+        XCTAssertEqual(model.messages.last?.blocks, [.text("Response stopped.")])
+        output.finish()
+    }
+    func testOldResponseCannotStopTheNextRequest() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        var a: AsyncThrowingStream<String, Error>.Continuation!
+        var b: AsyncThrowingStream<String, Error>.Continuation!
+        let first = AsyncThrowingStream<String, Error> { a = $0 }
+        let second = AsyncThrowingStream<String, Error> { b = $0 }
+        var calls = 0
+        let model = HomeViewModel(historyDirectory: folder, responseStream: { _, _ in
+            calls += 1; return calls == 1 ? first : second
+        })
+        model.draft = "First"
+        model.send()
+        try await waitUntil { calls == 1 }
+        model.stopResponding()
+        model.draft = "Second"
+        model.send()
+        try await waitUntil { calls == 2 }
+        a.finish()
+        b.yield("Second answer")
+        try await waitUntil { model.messages.last?.rawText == "Second answer" }
+        XCTAssertTrue(model.isResponding)
+        b.finish()
+        try await waitUntil { !model.isResponding }
+    }
+}
