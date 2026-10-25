@@ -24,6 +24,25 @@ enum HomeSheetLayout {
     }
 }
 
+/// Stable suggested names derive from saved room numbers, without creating an empty record.
+enum RoomNameSequence {
+    static func nextName(in names: [String]) -> String {
+        let numbers = Set(names.compactMap { name -> Int? in
+            let words = name.lowercased().split(whereSeparator: { $0.isWhitespace })
+            let suffix: Substring?
+            if words.count == 2, words[0] == "room" { suffix = words[1] }
+            else if words.count == 3, words[0] == "new", words[1] == "room" { suffix = words[2] }
+            else { suffix = nil }
+            guard let suffix, let value = Int(suffix), value > 0 else { return nil }
+            return value
+        })
+        let (candidate, overflow) = max(0, numbers.max() ?? 0).addingReportingOverflow(1)
+        var next = overflow ? 1 : candidate
+        while numbers.contains(next) { next += 1 }
+        return "New Room \(next)"
+    }
+}
+
 /// Home chat and local scanned-room editor state.
 @Observable
 final class HomeViewModel {
@@ -37,6 +56,8 @@ final class HomeViewModel {
     var sceneID = UUID()
     var activeLayout: RoomLayoutSnapshot?
     var activeRoomName: String?
+    var activeRoomID: String?
+    private(set) var newRoomName = "New Room 1"
     var savedScan: SavedScan?
     var scanLoadError: String?
     var isSimulating = false
@@ -50,8 +71,32 @@ final class HomeViewModel {
     private let catalog = try? ProductCatalog()
     private var roomGeneration = 0
     private var responseTask: Task<Void, Never>?
+    private var responseID = UUID()
+    private var conversationKey = "no-room"
+    private var conversations: [String: [ChatMessage]] = [:]
 
-    var sheetTitle: String { activeRoomName ?? "\(userName)’s Room" }
+    private func activateConversation(_ key: String) {
+        responseTask?.cancel()
+        responseID = UUID()
+        isResponding = false
+        if let last = messages.last, last.role == .assistant, last.rawText.isEmpty { messages.removeLast() }
+        conversations[conversationKey] = messages
+        conversationKey = key
+        messages = conversations[key] ?? []
+        selectedProductID = nil
+        draft = ""
+    }
+
+    var roomDisplayName: String { activeRoomName ?? newRoomName }
+    var suggestedSaveName: String { activeRoomID == nil ? roomDisplayName : newRoomName }
+
+    func updateRoomNames(_ entries: [RoomLibraryEntry]) {
+        newRoomName = RoomNameSequence.nextName(in: entries.map(\.name))
+    }
+
+    func needsSaveBeforeSwitch(layoutChanged: Bool) -> Bool {
+        hasScannedSpace && layoutChanged
+    }
     var canSend: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResponding }
 
     // MARK: - Actions
@@ -64,7 +109,7 @@ final class HomeViewModel {
     func finishScan(_ scan: SavedScan?) {
         isPresentingScan = false
         guard let scan else {
-            scanLoadError = "No room was captured. Scan again on a LiDAR device, or open Room 1 in Profile → My rooms."
+            scanLoadError = "No room was captured. Scan again on a LiDAR device, or open Sample Room in My rooms."
             return
         }
         acceptScan(document: scan.document, files: scan.files)
@@ -74,25 +119,33 @@ final class HomeViewModel {
     @MainActor
     func prepareLibrary() async {
         do {
-            try await Task.detached(priority: .userInitiated) { try RoomLibraryStore.ensureDemoRoom() }.value
+            let entries = try await Task.detached(priority: .userInitiated) {
+                try RoomLibraryStore.ensureDemoRoom()
+                return try RoomLibraryStore.all()
+            }.value
+            updateRoomNames(entries)
         } catch { scanLoadError = error.localizedDescription }
     }
 
     func openSavedRoom(_ entry: RoomLibraryEntry) {
+        activateConversation("saved:" + entry.id)
         roomGeneration += 1
         sceneID = UUID()
         activeLayout = entry.layout
         savedScan = entry.scan
         activeRoomName = entry.name
+        activeRoomID = entry.id
         hasScannedSpace = true
         sheetDetent = .collapsed
         isProfilePresented = false
     }
     func acceptScan(document: RoomDocument, files: ScanFiles) {
+        activateConversation("scan:" + document.id)
         roomGeneration += 1
         sceneID = UUID()
         activeLayout = nil
-        activeRoomName = "Scanned room"
+        activeRoomName = newRoomName
+        activeRoomID = nil
         savedScan = SavedScan(document: document, files: files)
         hasScannedSpace = true
     }
@@ -107,11 +160,13 @@ final class HomeViewModel {
         } catch { if generation == roomGeneration { scanLoadError = error.localizedDescription } }
     }
     func removeCurrentRoom() {
+        activateConversation("no-room")
         roomGeneration += 1
         hasScannedSpace = false
         sceneID = UUID()
         activeLayout = nil
         activeRoomName = nil
+        activeRoomID = nil
         savedScan = nil
         selectedProductID = nil
         isSimulating = false
@@ -124,26 +179,49 @@ final class HomeViewModel {
         isProfilePresented = true
     }
 
-    func send() {
+    func send(contextProvider: (() async throws -> RoomChatContext)? = nil) {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isResponding else { return }
+        let generation = roomGeneration
+        let requestID = UUID()
+        responseID = requestID
+        let requiresRoom = hasScannedSpace
         draft = ""
-        messages.append(ChatMessage(role: .user, text: text))
-        let reply = ChatMessage(role: .assistant, text: "")
-        messages.append(reply)
-
-        let turns = messages.dropLast().map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
         isResponding = true
         responseTask = Task { [client] in
+            defer { if responseID == requestID { isResponding = false } }
+            var replyID: ChatMessage.ID?
             do {
-                for try await chunk in client.stream(Array(turns)) {
+                // Fail closed when a room is open but its preview cannot provide current geometry.
+                // Never silently send the original scan after the user has moved furniture.
+                let context: RoomChatContext?
+                if requiresRoom {
+                    guard let contextProvider else { throw RoomLibraryError.previewNotReady }
+                    context = try await contextProvider()
+                    try context?.validate()
+                } else { context = nil }
+                try Task.checkCancellation()
+                guard generation == roomGeneration, responseID == requestID else { return }
+                messages.append(ChatMessage(role: .user, text: text))
+                let turns = messages.map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
+                let reply = ChatMessage(role: .assistant, text: "")
+                replyID = reply.id
+                messages.append(reply)
+                for try await chunk in client.stream(turns, roomContext: context) {
+                    try Task.checkCancellation()
+                    guard generation == roomGeneration, responseID == requestID else { return }
                     append(chunk, to: reply.id)
                 }
             } catch is CancellationError {
             } catch {
-                append(replyIsEmpty(reply.id) ? error.localizedDescription : "\n\n⚠️ \(error.localizedDescription)", to: reply.id)
+                guard generation == roomGeneration, responseID == requestID else { return }
+                if let replyID {
+                    append(replyIsEmpty(replyID) ? error.localizedDescription : "\n\n⚠️ \(error.localizedDescription)", to: replyID)
+                } else {
+                    draft = text
+                    scanLoadError = "Couldn't read the current room for chat. Wait for the 3D preview and try again."
+                }
             }
-            isResponding = false
         }
     }
 

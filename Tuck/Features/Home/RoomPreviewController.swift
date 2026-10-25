@@ -8,10 +8,12 @@ final class RoomPreviewController: ObservableObject {
     private var moveEnabled = false
     private var initialLayout: RoomLayoutSnapshot?
     private var scannedRoom: RoomDocument?
+    private var initialSnapshot: RoomLayoutSnapshot?
 
     func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool, scannedRoom: RoomDocument? = nil) {
         webView = view
         isReady = false
+        initialSnapshot = nil
         initialLayout = layout
         self.scannedRoom = scannedRoom
         self.moveEnabled = moveEnabled
@@ -21,6 +23,7 @@ final class RoomPreviewController: ObservableObject {
         guard webView === view else { return }
         webView = nil
         isReady = false
+        initialSnapshot = nil
     }
 
     func didLoad(_ view: WKWebView) async throws {
@@ -38,6 +41,7 @@ final class RoomPreviewController: ObservableObject {
         guard webView === view else { return }
         isReady = true
         try await applyMoveMode()
+        initialSnapshot = try await snapshot()
     }
 
     func setMoveEnabled(_ enabled: Bool) {
@@ -50,6 +54,23 @@ final class RoomPreviewController: ObservableObject {
     private func applyMoveMode() async throws {
         guard let webView else { return }
         _ = try await webView.evaluateJavaScript("window.tuckEditor.setFurnitureMoveEnabled(\(moveEnabled ? "true" : "false"))")
+    }
+
+    func hasUnsavedChanges() async throws -> Bool {
+        guard let initialSnapshot else { throw RoomLibraryError.previewNotReady }
+        return try await snapshot().hasPlacementChanges(comparedTo: initialSnapshot)
+    }
+
+    func chatContext(roomID: String, roomName: String) async throws -> RoomChatContext {
+        guard isReady, let view = webView else { throw RoomLibraryError.previewNotReady }
+        let value = try await view.evaluateJavaScript("JSON.stringify(window.tuckEditor.chatContext())")
+        guard webView === view, isReady, let json = value as? String else { throw RoomLibraryError.previewNotReady }
+        var context = try JSONDecoder().decode(RoomChatContext.self, from: Data(json.utf8))
+        context.roomID = roomID
+        context.roomName = roomName
+        context.revision = UUID().uuidString
+        try context.validate()
+        return context
     }
 
     func snapshot() async throws -> RoomLayoutSnapshot {

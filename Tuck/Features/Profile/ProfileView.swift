@@ -76,6 +76,25 @@ struct ProfileView: View {
     }
 }
 
+/// Shared entry point: Home opens the same room list used under Profile.
+struct MyRoomsSheet: View {
+    let onOpenRoom: (RoomLibraryEntry) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ProfileRoomsView(onOpenRoom: onOpenRoom)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                    }
+                }
+        }
+        .tint(Color("TuckBrown"))
+    }
+}
+
 private struct ProfileRoomsView: View {
     var onOpenRoom: ((RoomLibraryEntry) -> Void)? = nil
     @State private var rooms: [RoomLibraryEntry] = []

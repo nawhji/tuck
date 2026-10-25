@@ -260,7 +260,24 @@ function restoreDemoGeometry(){if(scannedSource){clearScannedAssets();setRoomGeo
 
 // Open directly into the furnished scene so visual quality is immediately visible.
 for(let a of assets)if(!a.optional)add(a.id);selected=null;sync();message('Your room is ready. Drag to explore.');render();
-window.tuckEditor={add,layout,loadLayout,loadScannedRoom,rotateSelected:rotateStep,setFurnitureMoveEnabled,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
+// Chat uses current editor transforms, including unsaved moves and removals.
+function chatGeometry(id,category,label,confidence,parts,pose){
+ const local=boundsOf(parts),corners=local.corners.map(v=>world(v,pose));
+ const lo=[0,1,2].map(k=>Math.min(...corners.map(v=>v[k]))),hi=[0,1,2].map(k=>Math.max(...corners.map(v=>v[k])));
+ return{id,category,label:label||null,confidence:confidence||null,dimensionsMeters:local.hi.map((v,k)=>v-local.lo[k]),centerMeters:lo.map((v,k)=>(v+hi[k])/2),yawRadians:pose.yawRadians,worldCornersMeters:corners,boundsMeters:{min:lo,max:hi}};
+}
+function chatContext(){
+ const objects=items.map(i=>{const a=assetMap.get(i.assetId),e=scannedSource?.objects.find(e=>'scan-'+e.id===i.assetId);return chatGeometry(i.instanceId,e?.category||i.assetId,e?.label||a.label,e?.confidence,a.parts,i)});
+ const identityPose={position:[0,0,0],yawRadians:0};
+ const structures=scannedSource?['walls','doors','windows','openings','floors'].flatMap(kind=>(scannedSource[kind]||[]).map(e=>{
+   const d=e.dimensions,t=e.transform,corners=[];
+   for(const x of [-d.width/2,d.width/2])for(const y of [-d.height/2,d.height/2])for(const z of [-d.depth/2,d.depth/2])corners.push([t[0]*x+t[4]*y+t[8]*z+t[12],t[1]*x+t[5]*y+t[9]*z+t[13],t[2]*x+t[6]*y+t[10]*z+t[14]]);
+   const lo=[0,1,2].map(k=>Math.min(...corners.map(v=>v[k]))),hi=[0,1,2].map(k=>Math.max(...corners.map(v=>v[k])));
+   return{id:e.id,category:e.category,label:e.label||null,confidence:e.confidence||null,dimensionsMeters:[d.width,d.height,d.depth],centerMeters:[t[12],t[13],t[14]],yawRadians:null,worldCornersMeters:corners,boundsMeters:{min:lo,max:hi}};
+ })):room.parts.map((p,k)=>chatGeometry('sample-structure-'+k,'structure',null,null,[p],identityPose));
+ return{roomID:'editor',roomName:'Room',revision:'pending',source:scannedSource?'scan_editor':'sample_editor',units:'meters',coordinateSystem:'right-handed-y-up',selectedObjectID:selected||null,objects,structures};
+}
+window.tuckEditor={chatContext,add,layout,loadLayout,loadScannedRoom,rotateSelected:rotateStep,setFurnitureMoveEnabled,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
 project,boundsCenter,screenAxis,inferAxis,axisParameter,gizmoTransform,furnitureAxisLengths,
 interactionState:()=>({sourceRoomID:scannedSource?.id??null,furnitureMoveEnabled,selected,axis:activeAxis,direction:activeDirection,dragging:dragging?{id:dragging.id,axis:dragging.axis}:null,camera:{yaw,pitch,radius}}),
 setCamera:(y,p,r)=>{yaw=y;pitch=p;radius=r;showAxis(null);dirty=true}};

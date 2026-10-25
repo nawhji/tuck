@@ -135,17 +135,26 @@ enum RoomLibraryStore {
 
     private static let seedLock = NSLock()
 
-    /// Register once. Never replace a user's subsequently edited Room 1.
+    /// Register once. Keep the sample layout and any user edits when updating its default name.
     static func ensureDemoRoom(layoutsRoot: URL? = nil) throws {
         seedLock.lock()
         defer { seedLock.unlock() }
         let folder = try root(layoutsRoot)
         let id = "tuck-demo-room-1"
-        guard !FileManager.default.fileExists(atPath: folder.appendingPathComponent(id + ".json").path) else { return }
+        let file = folder.appendingPathComponent(id + ".json")
+        if FileManager.default.fileExists(atPath: file.path) {
+            let record = try decoder().decode(Record.self, from: Data(contentsOf: file))
+            // Only migrate the original sample's old default name, never user-renamed rooms.
+            if record.id == id && record.name == "Room 1" {
+                try write(Record(id: record.id, name: "Sample Room", createdAt: record.createdAt,
+                                 updatedAt: record.updatedAt, layout: record.layout), to: folder)
+            }
+            return
+        }
         let json = #"{"version":1,"units":"meters","upAxis":"Y","items":[{"instanceId":"wall_shelves_1","assetId":"wall_shelves","position":[0.43374999999999997,1.0775000000000001,1.6],"yawRadians":0},{"instanceId":"drawers_sink_2","assetId":"drawers_sink","position":[0.42999999999999994,0.0,1.44725],"yawRadians":0},{"instanceId":"bed_3","assetId":"bed","position":[0.8800000000000001,0.0,-0.72],"yawRadians":0},{"instanceId":"rug_4","assetId":"rug","position":[-1.1,0.003000000000000001,0.4],"yawRadians":0},{"instanceId":"chair_5","assetId":"chair","position":[-1.1035,0.019161240682637543,-0.43],"yawRadians":0},{"instanceId":"mirror_6","assetId":"mirror","position":[-0.445,0.0,-1.5409596300854067],"yawRadians":0},{"instanceId":"window_curtains_7","assetId":"window_curtains","position":[1.229553358369463,0.41999999999999993,0.8200000000000001],"yawRadians":0}]}"#
         let layout = try JSONDecoder().decode(RoomLayoutSnapshot.self, from: Data(json.utf8))
         try layout.validate()
-        try write(Record(id: id, name: "Room 1", createdAt: Date(), updatedAt: Date(), layout: layout), to: folder)
+        try write(Record(id: id, name: "Sample Room", createdAt: Date(), updatedAt: Date(), layout: layout), to: folder)
     }
 
     private static func write(_ record: Record, to folder: URL) throws {
@@ -186,5 +195,22 @@ extension RoomDocument {
                 }
             }
         }
+    }
+}
+
+extension RoomLayoutSnapshot {
+    /// Selection, camera movement and item ordering don't count as layout edits.
+    func hasPlacementChanges(comparedTo baseline: RoomLayoutSnapshot) -> Bool {
+        guard version == baseline.version, units == baseline.units, upAxis == baseline.upAxis,
+              scannedRoom == baseline.scannedRoom, items.count == baseline.items.count else { return true }
+        let epsilon = 0.00001
+        for item in items {
+            guard let old = baseline.items.first(where: { $0.instanceId == item.instanceId }),
+                  item.assetId == old.assetId, item.position.count == 3, old.position.count == 3 else { return true }
+            if zip(item.position, old.position).contains(where: { abs($0 - $1) > epsilon }) { return true }
+            let angle = (item.yawRadians - old.yawRadians).truncatingRemainder(dividingBy: 2 * .pi)
+            if min(abs(angle), 2 * .pi - abs(angle)) > epsilon { return true }
+        }
+        return false
     }
 }

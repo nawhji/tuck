@@ -229,7 +229,7 @@ final class ScannedRoomLibraryTests: XCTestCase {
             let entries = try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts)
             XCTAssertEqual(entries.count, 1)
             let room = try XCTUnwrap(entries.first)
-            XCTAssertEqual(room.name, "Room 1")
+            XCTAssertEqual(room.name, "Sample Room")
             XCTAssertEqual(room.layout?.items.count, 7)
             XCTAssertNil(room.layout?.scannedRoom)
             let edited = RoomLayoutSnapshot(version: 1, units: "meters", upAxis: "Y", items: [])
@@ -291,7 +291,7 @@ final class ScannedRoomLibraryTests: XCTestCase {
         XCTAssertFalse(model.isProfilePresented)
         XCTAssertNotEqual(model.sceneID, sceneID)
         XCTAssertEqual(model.activeLayout, layout)
-        XCTAssertEqual(model.sheetTitle, "My room")
+        XCTAssertEqual(model.roomDisplayName, "My room")
         model.removeCurrentRoom()
         XCTAssertNil(model.activeLayout)
         XCTAssertFalse(model.hasScannedSpace)
@@ -309,8 +309,208 @@ final class ScannedRoomLibraryTests: XCTestCase {
             try RoomLibraryStore.saveExisting(id: original.id, layout: snapshot(), scansRoot: scans, layoutsRoot: layouts)
             try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
             let updated = try XCTUnwrap(RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first)
-            XCTAssertEqual(updated.name, "Room 1")
+            XCTAssertEqual(updated.name, "Sample Room")
             XCTAssertEqual(updated.layout?.scannedRoom?.id, RoomDocument.sample.id)
         }
+    }
+}
+
+final class RoomSwitchingTests: XCTestCase {
+    private func layout(x: Double = 0, yaw: Double = 0, asset: String = "chair") -> RoomLayoutSnapshot {
+        .init(version: 1, units: "meters", upAxis: "Y", items: [
+            .init(instanceId: "chair-1", assetId: asset, position: [x,0,0], yawRadians: yaw)
+        ])
+    }
+    func testSuggestedNameAdvancesBeyondSavedRoomNumbers() {
+        XCTAssertEqual(RoomNameSequence.nextName(in: []), "New Room 1")
+        XCTAssertEqual(RoomNameSequence.nextName(in: ["Room 1"]), "New Room 2")
+        XCTAssertEqual(RoomNameSequence.nextName(in: ["Room 1", "New Room 2", "New Room 8"]), "New Room 9")
+        XCTAssertEqual(RoomNameSequence.nextName(in: ["Bedroom", " Room 12 ", "new room 4"]), "New Room 13")
+    }
+    func testNonNumericAndOverflowNamesCannotCrashNumbering() {
+        XCTAssertEqual(RoomNameSequence.nextName(in: ["Room -2", "New Room x", "New Room 99999999999999999999999999"]), "New Room 1")
+        XCTAssertEqual(RoomNameSequence.nextName(in: ["Room \(Int.max)", "New Room 2"]), "New Room 1")
+    }
+    func testCameraAndSelectionDoNotCountAsPlacementChanges() {
+        XCTAssertFalse(layout().hasPlacementChanges(comparedTo: layout()))
+        XCTAssertFalse(layout(yaw: .pi * 2).hasPlacementChanges(comparedTo: layout()))
+        XCTAssertFalse(layout(x: 0.0000001, yaw: 0.0000001).hasPlacementChanges(comparedTo: layout()))
+    }
+    func testMovementRotationAndReplacementAreDetected() {
+        XCTAssertTrue(layout(x: 0.1).hasPlacementChanges(comparedTo: layout()))
+        XCTAssertTrue(layout(yaw: .pi / 12).hasPlacementChanges(comparedTo: layout()))
+        XCTAssertTrue(layout(asset: "bed").hasPlacementChanges(comparedTo: layout()))
+        let empty = RoomLayoutSnapshot(version: 1, units: "meters", upAxis: "Y", items: [])
+        XCTAssertTrue(empty.hasPlacementChanges(comparedTo: layout()))
+    }
+    func testItemOrderingDoesNotCreateFalseUnsavedChanges() {
+        let a = RoomLayoutSnapshot.Item(instanceId: "a", assetId: "chair", position: [0,0,0], yawRadians: 0)
+        let b = RoomLayoutSnapshot.Item(instanceId: "b", assetId: "bed", position: [1,0,0], yawRadians: 0)
+        let one = RoomLayoutSnapshot(version: 1, units: "meters", upAxis: "Y", items: [a,b])
+        let two = RoomLayoutSnapshot(version: 1, units: "meters", upAxis: "Y", items: [b,a])
+        XCTAssertFalse(one.hasPlacementChanges(comparedTo: two))
+    }
+    @MainActor
+    func testEmptyHomeUsesNumberWithoutCreatingARoom() {
+        let model = HomeViewModel()
+        XCTAssertEqual(model.roomDisplayName, "New Room 1")
+        XCTAssertFalse(model.hasScannedSpace)
+        XCTAssertFalse(model.needsSaveBeforeSwitch(layoutChanged: false))
+        let entries = [RoomLibraryEntry(id: "saved", name: "New Room 5", updatedAt: Date(), layout: nil, scan: nil)]
+        model.updateRoomNames(entries)
+        XCTAssertEqual(model.roomDisplayName, "New Room 6")
+        XCTAssertFalse(model.hasScannedSpace)
+    }
+    @MainActor
+    func testSavedRoomPromptsOnlyWhenPlacementChanges() {
+        let model = HomeViewModel()
+        model.openSavedRoom(.init(id: "saved", name: "Room 1", updatedAt: Date(), layout: layout(), scan: nil))
+        XCTAssertEqual(model.activeRoomID, "saved")
+        XCTAssertEqual(model.roomDisplayName, "Room 1")
+        XCTAssertFalse(model.needsSaveBeforeSwitch(layoutChanged: false))
+        XCTAssertTrue(model.needsSaveBeforeSwitch(layoutChanged: true))
+    }
+    @MainActor
+    func testFreshScanPromptsOnlyAfterPlacementChanges() {
+        let model = HomeViewModel()
+        let dir = URL(fileURLWithPath: "/unused")
+        let files = ScanFiles(directory: dir, json: dir, nativeJSON: dir, model: nil, modelWarning: nil)
+        model.acceptScan(document: .sample, files: files)
+        XCTAssertEqual(model.roomDisplayName, "New Room 1")
+        XCTAssertNil(model.activeRoomID)
+        XCTAssertFalse(model.needsSaveBeforeSwitch(layoutChanged: false))
+        XCTAssertTrue(model.needsSaveBeforeSwitch(layoutChanged: true))
+        XCTAssertEqual(model.suggestedSaveName, "New Room 1")
+    }
+    @MainActor
+    func testLeavingSavedRoomReturnsToNextDraftName() {
+        let model = HomeViewModel()
+        let entry = RoomLibraryEntry(id: "saved", name: "New Room 5", updatedAt: Date(), layout: layout(), scan: nil)
+        model.updateRoomNames([entry])
+        model.openSavedRoom(entry)
+        XCTAssertEqual(model.roomDisplayName, "New Room 5")
+        XCTAssertEqual(model.suggestedSaveName, "New Room 6")
+        model.removeCurrentRoom()
+        XCTAssertEqual(model.roomDisplayName, "New Room 6")
+        XCTAssertNil(model.activeRoomID)
+        XCTAssertFalse(model.hasScannedSpace)
+    }
+}
+
+final class SampleRoomMigrationTests: XCTestCase {
+    private func withRoots(_ body: (URL, URL) throws -> Void) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try body(root.appendingPathComponent("scans"), root.appendingPathComponent("layouts"))
+    }
+    func testFreshInstallStartsAtOneWithSampleExcludedFromNumbering() throws {
+        try withRoots { scans, layouts in
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let entries = try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts)
+            XCTAssertEqual(entries.map(\.name), ["Sample Room"])
+            XCTAssertEqual(RoomNameSequence.nextName(in: entries.map(\.name)), "New Room 1")
+            XCTAssertEqual(RoomNameSequence.nextName(in: ["Sample Room", "New Room 1"]), "New Room 2")
+        }
+    }
+    func testLegacySampleRenameKeepsIDTimestampsAndEditedFurniture() throws {
+        try withRoots { scans, layouts in
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let file = layouts.appendingPathComponent("tuck-demo-room-1.json")
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            json["name"] = "Room 1"
+            var layout = try XCTUnwrap(json["layout"] as? [String: Any])
+            var items = try XCTUnwrap(layout["items"] as? [[String: Any]])
+            items[0]["position"] = [1.25, 2.0, 3.5]
+            items[0]["yawRadians"] = 0.7
+            layout["items"] = items; json["layout"] = layout
+            try JSONSerialization.data(withJSONObject: json).write(to: file)
+            let before = try XCTUnwrap(RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first)
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let entries = try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts)
+            let after = try XCTUnwrap(entries.first)
+            XCTAssertEqual(entries.count, 1)
+            XCTAssertEqual(after.id, before.id)
+            XCTAssertEqual(after.name, "Sample Room")
+            XCTAssertEqual(after.updatedAt, before.updatedAt)
+            XCTAssertEqual(after.layout, before.layout)
+            let migrated = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            XCTAssertEqual(migrated["createdAt"] as? String, json["createdAt"] as? String)
+        }
+    }
+    func testUserRenamedSampleAndOtherRoom1AreKept() throws {
+        try withRoots { scans, layouts in
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let file = layouts.appendingPathComponent("tuck-demo-room-1.json")
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            json["name"] = "My custom sample"
+            try JSONSerialization.data(withJSONObject: json).write(to: file)
+            let layout = try XCTUnwrap(RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first?.layout)
+            let otherID = try RoomLibraryStore.saveNew(name: "Room 1", layout: layout, layoutsRoot: layouts)
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let entries = try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts)
+            XCTAssertEqual(entries.first(where: { $0.id == "tuck-demo-room-1" })?.name, "My custom sample")
+            XCTAssertEqual(entries.first(where: { $0.id == otherID })?.name, "Room 1")
+        }
+    }
+}
+
+final class RoomChatContextTests: XCTestCase {
+    private func context() -> RoomChatContext {
+        .init(roomID: "room-a", roomName: "Bedroom", revision: "revision-2", source: "scan_editor",
+              units: "meters", coordinateSystem: "right-handed-y-up", selectedObjectID: "chair",
+              objects: [.init(id: "chair", category: "chair", label: "Reading chair", confidence: "high",
+                              dimensionsMeters: [1, 1, 1], centerMeters: [2, 0.5, 3], yawRadians: 0,
+                              worldCornersMeters: Array(repeating: [2, 0.5, 3], count: 8),
+                              boundsMeters: .init(min: [1.5, 0, 2.5], max: [2.5, 1, 3.5]))], structures: [])
+    }
+
+    func testActualRequestIncludesRoomAndRetainsConversation() throws {
+        let client = ClaudeClient()
+        let request = try client.makeRequest([.init(role: "user", text: "Beside this chair")], roomContext: context())
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any])
+        let system = try XCTUnwrap(body["system"] as? String)
+        XCTAssertTrue(system.contains("Reading chair"))
+        XCTAssertTrue(system.contains("revision-2"))
+        XCTAssertTrue(system.contains("0.0254"))
+        XCTAssertTrue(system.contains("No collision/clearance tool is connected"))
+        let messages = try XCTUnwrap(body["messages"] as? [[String: String]])
+        XCTAssertEqual(messages.first?["content"], "Beside this chair")
+    }
+
+    func testMissingRoomDoesNotReusePreviousRoom() {
+        let client = ClaudeClient()
+        XCTAssertTrue(client.prompt(roomContext: context()).contains("Reading chair"))
+        let prompt = client.prompt(roomContext: nil)
+        XCTAssertFalse(prompt.contains("Reading chair"))
+        XCTAssertTrue(prompt.contains("no room is currently open"))
+    }
+
+    @MainActor
+    func testRoomConversationsAreIsolatedAndRestored() {
+        let model = HomeViewModel()
+        let a = RoomLibraryEntry(id: "a", name: "A", updatedAt: Date(), layout: nil, scan: nil)
+        let b = RoomLibraryEntry(id: "b", name: "B", updatedAt: Date(), layout: nil, scan: nil)
+        model.openSavedRoom(a)
+        model.messages = [.init(role: .user, text: "A's bed")]
+        model.openSavedRoom(b)
+        XCTAssertTrue(model.messages.isEmpty)
+        model.messages = [.init(role: .user, text: "B's table")]
+        model.openSavedRoom(a)
+        XCTAssertEqual(model.messages.first?.rawText, "A's bed")
+    }
+
+    @MainActor
+    func testFailedLiveSnapshotKeepsDraftWithoutCallingAPI() async throws {
+        let model = HomeViewModel()
+        model.hasScannedSpace = true
+        model.draft = "Fit this beside my bed"
+        model.send(contextProvider: { throw RoomLibraryError.previewNotReady })
+        for _ in 0..<100 where model.isResponding { try await Task.sleep(nanoseconds: 1_000_000) }
+        XCTAssertFalse(model.isResponding)
+        XCTAssertEqual(model.draft, "Fit this beside my bed")
+        XCTAssertTrue(model.messages.isEmpty)
+        XCTAssertNotNil(model.scanLoadError)
     }
 }
