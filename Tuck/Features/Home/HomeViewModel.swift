@@ -15,6 +15,7 @@ final class HomeViewModel {
 
     var hasScannedSpace = false
     var isPresentingScan = false
+    var isProfilePresented = false
     var savedScan: SavedScan?
     var scanLoadError: String?
     var isSimulating = false
@@ -33,7 +34,10 @@ final class HomeViewModel {
 
     // MARK: - Actions (미구현)
 
-    func startScan() { isPresentingScan = true }
+    func startScan() {
+        guard !isProfilePresented else { return }
+        isPresentingScan = true
+    }
 
     /// Demo destination is deliberately independent of RoomPlan success or support.
     func finishDemoScan() {
@@ -54,7 +58,10 @@ final class HomeViewModel {
             acceptScan(document: scan.document, files: scan.files)
         } catch { scanLoadError = error.localizedDescription }
     }
-    func openProfile() { /* TODO: Profile 화면으로 이동 */ }
+    func openProfile() {
+        guard !isPresentingScan else { return }
+        isProfilePresented = true
+    }
 
     func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)

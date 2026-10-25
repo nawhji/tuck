@@ -26,16 +26,28 @@
 		B10000000000000000000008 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000008 /* ChatMessage.swift */; };
 		B10000000000000000000010 /* ClaudeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ClaudeClient.swift */; };
 		B10000000000000000000011 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* Secrets.swift */; };
-		C10000000000000000000030 /* ScanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000030 /* ScanStore.swift */; };
-		C10000000000000000000031 /* SavedRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000031 /* SavedRoomView.swift */; };
-D00000000000000000000002 = {isa = PBXBuildFile; fileRef = D00000000000000000000001; };
 		B10000000000000000000020 /* ProductCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ProductCatalog.swift */; };
 		B10000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */; };
 		B10000000000000000000090 /* TuckAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000090 /* TuckAvatar.swift */; };
+		C10000000000000000000030 /* ScanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000030 /* ScanStore.swift */; };
+		C10000000000000000000031 /* SavedRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000031 /* SavedRoomView.swift */; };
+		C10000000000000000000040 /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000040 /* FavoritesStore.swift */; };
+		C10000000000000000000041 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000041 /* ProfileView.swift */; };
+		D00000000000000000000002 /* RoomScanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D00000000000000000000001 /* RoomScanTests.swift */; };
 		C30000000000000000000001 /* DemoScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* DemoScanView.swift */; };
 		C30000000000000000000002 /* DemoRoom.html in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000012 /* DemoRoom.html */; };
 		C30000000000000000000003 /* DemoRoomPreview.png in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000013 /* DemoRoomPreview.png */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D00000000000000000000009 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000005;
+			remoteInfo = Tuck;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A00000000000000000000006 /* Tuck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tuck.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -60,13 +72,15 @@ D00000000000000000000002 = {isa = PBXBuildFile; fileRef = D000000000000000000000
 		B00000000000000000000008 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
 		B00000000000000000000010 /* ClaudeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeClient.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
-		C00000000000000000000030 /* ScanStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStore.swift; sourceTree = "<group>"; };
-		C00000000000000000000031 /* SavedRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRoomView.swift; sourceTree = "<group>"; };
-D00000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanTests.swift; sourceTree = "<group>"; };
-D00000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = TuckTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B00000000000000000000020 /* ProductCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCatalog.swift; sourceTree = "<group>"; };
 		B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */ = {isa = PBXFileReference; lastKnownFileType = text; name = "TUCK_Product_Catalog - 시트1.csv"; path = "data/TUCK_Product_Catalog - 시트1.csv"; sourceTree = SOURCE_ROOT; };
 		B00000000000000000000090 /* TuckAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuckAvatar.swift; sourceTree = "<group>"; };
+		C00000000000000000000030 /* ScanStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStore.swift; sourceTree = "<group>"; };
+		C00000000000000000000031 /* SavedRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRoomView.swift; sourceTree = "<group>"; };
+		C00000000000000000000040 /* FavoritesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesStore.swift; sourceTree = "<group>"; };
+		C00000000000000000000041 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		D00000000000000000000001 /* RoomScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanTests.swift; sourceTree = "<group>"; };
+		D00000000000000000000003 /* TuckTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = TuckTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C30000000000000000000011 /* DemoScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScanView.swift; sourceTree = "<group>"; };
 		C30000000000000000000012 /* DemoRoom.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = DemoRoom.html; sourceTree = "<group>"; };
 		C30000000000000000000013 /* DemoRoomPreview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = DemoRoomPreview.png; sourceTree = "<group>"; };
@@ -80,14 +94,20 @@ D00000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.c
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-D00000000000000000000007 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		D00000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A00000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
-D00000000000000000000005,
+				D00000000000000000000005 /* TuckTests */,
 				A00000000000000000000004 /* Tuck */,
 				A0000000000000000000006B /* README.md */,
 				A00000000000000000000003 /* Products */,
@@ -97,7 +117,7 @@ D00000000000000000000005,
 		A00000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-D00000000000000000000003,
+				D00000000000000000000003 /* TuckTests.xctest */,
 				A00000000000000000000006 /* Tuck.app */,
 			);
 			name = Products;
@@ -126,6 +146,7 @@ D00000000000000000000003,
 		A00000000000000000000071 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				C20000000000000000000041 /* Profile */,
 				B2000000000000000000000 /* Home */,
 				A00000000000000000000072 /* Scan */,
 				A000000000000000000000E2 /* Splash */,
@@ -157,6 +178,7 @@ D00000000000000000000003,
 		A00000000000000000000074 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C00000000000000000000040 /* FavoritesStore.swift */,
 				C00000000000000000000030 /* ScanStore.swift */,
 				B00000000000000000000011 /* Secrets.swift */,
 				B00000000000000000000010 /* ClaudeClient.swift */,
@@ -202,7 +224,22 @@ D00000000000000000000003,
 			path = Home;
 			sourceTree = "<group>";
 		};
-D00000000000000000000005 = {isa = PBXGroup; children = (D00000000000000000000001,); path = TuckTests; sourceTree = "<group>"; };
+		C20000000000000000000041 /* Profile */ = {
+			isa = PBXGroup;
+			children = (
+				C00000000000000000000041 /* ProfileView.swift */,
+			);
+			path = Profile;
+			sourceTree = "<group>";
+		};
+		D00000000000000000000005 /* TuckTests */ = {
+			isa = PBXGroup;
+			children = (
+				D00000000000000000000001 /* RoomScanTests.swift */,
+			);
+			path = TuckTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -223,16 +260,25 @@ D00000000000000000000005 = {isa = PBXGroup; children = (D00000000000000000000001
 			productReference = A00000000000000000000006 /* Tuck.app */;
 			productType = "com.apple.product-type.application";
 		};
-D00000000000000000000004 /* TuckTests */ = {isa = PBXNativeTarget; buildConfigurationList = D0000000000000000000000B; buildPhases = (D00000000000000000000006, D00000000000000000000007, D00000000000000000000008,); buildRules = (); dependencies = (D0000000000000000000000A,); name = TuckTests; productName = TuckTests; productReference = D00000000000000000000003; productType = "com.apple.product-type.bundle.unit-test"; };
+		D00000000000000000000004 /* TuckTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D0000000000000000000000B /* Build configuration list for PBXNativeTarget "TuckTests" */;
+			buildPhases = (
+				D00000000000000000000006 /* Sources */,
+				D00000000000000000000007 /* Frameworks */,
+				D00000000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D0000000000000000000000A /* PBXTargetDependency */,
+			);
+			name = TuckTests;
+			productName = TuckTests;
+			productReference = D00000000000000000000003 /* TuckTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
-
-/* Begin PBXContainerItemProxy section */
-D00000000000000000000009 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000005; remoteInfo = Tuck; };
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXTargetDependency section */
-D0000000000000000000000A = {isa = PBXTargetDependency; target = A00000000000000000000005; targetProxy = D00000000000000000000009; };
-/* End PBXTargetDependency section */
 
 /* Begin PBXProject section */
 		A00000000000000000000001 /* Project object */ = {
@@ -260,7 +306,7 @@ D0000000000000000000000A = {isa = PBXTargetDependency; target = A000000000000000
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-D00000000000000000000004,
+				D00000000000000000000004 /* TuckTests */,
 				A00000000000000000000005 /* Tuck */,
 			);
 		};
@@ -278,7 +324,13 @@ D00000000000000000000004,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-D00000000000000000000008 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		D00000000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -286,6 +338,8 @@ D00000000000000000000008 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C10000000000000000000041 /* ProfileView.swift in Sources */,
+				C10000000000000000000040 /* FavoritesStore.swift in Sources */,
 				C10000000000000000000031 /* SavedRoomView.swift in Sources */,
 				C10000000000000000000030 /* ScanStore.swift in Sources */,
 				A000000000000000000000C8 /* TuckApp.swift in Sources */,
@@ -312,8 +366,23 @@ D00000000000000000000008 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-D00000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D00000000000000000000002,); runOnlyForDeploymentPostprocessing = 0; };
+		D00000000000000000000006 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D00000000000000000000002 /* RoomScanTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D0000000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000005 /* Tuck */;
+			targetProxy = D00000000000000000000009 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A0000000000000000000000C /* Debug */ = {
@@ -362,7 +431,7 @@ D00000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 214748
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nicolejueunkim.tuckdemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -386,7 +455,7 @@ D00000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 214748
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nicolejueunkim.tuckdemo;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -396,8 +465,48 @@ D00000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 214748
 			};
 			name = Release;
 		};
-D0000000000000000000000C = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",); PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tuck.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tuck"; }; name = Debug; };
-D0000000000000000000000D = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",); PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tuck.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tuck"; }; name = Release; };
+		D0000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tuck.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tuck";
+			};
+			name = Debug;
+		};
+		D0000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hackathon.tuck.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tuck.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tuck";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -419,7 +528,15 @@ D0000000000000000000000D = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-D0000000000000000000000B = {isa = XCConfigurationList; buildConfigurations = (D0000000000000000000000C, D0000000000000000000000D,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		D0000000000000000000000B /* Build configuration list for PBXNativeTarget "TuckTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D0000000000000000000000C /* Debug */,
+				D0000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = A00000000000000000000001 /* Project object */;

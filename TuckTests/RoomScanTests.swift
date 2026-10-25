@@ -34,6 +34,7 @@ final class RoomScanTests: XCTestCase {
             try writeScan(root, id: "newer", date: "2026-10-24T12:00:00Z")
             let scan = try XCTUnwrap(ScanStore.latest(in: root))
             XCTAssertEqual(scan.id, "newer")
+            XCTAssertEqual(try ScanStore.all(in: root).map(\.id), ["newer", "older"])
             XCTAssertEqual(scan.document.objects.first?.label, "화장대")
             XCTAssertEqual(scan.document.objects.first?.dimensions.width, 1.0)
             XCTAssertEqual(scan.document.objects.first?.transform.count, 16)
@@ -50,6 +51,7 @@ final class RoomScanTests: XCTestCase {
             try FileManager.default.createDirectory(at: corrupt, withIntermediateDirectories: true)
             try Data("broken".utf8).write(to: corrupt.appendingPathComponent("room.json"))
             XCTAssertEqual(try ScanStore.latest(in: root)?.id, "good")
+            XCTAssertEqual(try ScanStore.all(in: root).map(\.id), ["good"])
         }
     }
 
@@ -88,5 +90,120 @@ final class RoomScanTests: XCTestCase {
         XCTAssertFalse(scanner.renameObject(id: object.id, label: "New label"))
         XCTAssertEqual(scanner.document?.objects[0].label, object.label)
         XCTAssertNotNil(scanner.saveMessage)
+    }
+}
+
+
+final class FavoritesStoreTests: XCTestCase {
+    private func withFile(_ run: (URL) throws -> Void) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try run(directory.appendingPathComponent("favorites.json"))
+    }
+
+    func testFavoriteRestoresFullProductAfterRelaunch() throws {
+        try withFile { url in
+            let store = FavoritesStore(fileURL: url)
+            let product = Product.samples[0]
+            XCTAssertTrue(store.toggle(product))
+            let restored = FavoritesStore(fileURL: url)
+            XCTAssertEqual(restored.products, [product])
+            XCTAssertTrue(restored.contains(product.id))
+        }
+    }
+
+    func testUnsaveUsesIDAndPersistsAcrossRelaunch() throws {
+        try withFile { url in
+            let store = FavoritesStore(fileURL: url)
+            var updated = Product.samples[0]
+            XCTAssertTrue(store.toggle(updated))
+            updated.name = "Changed recommendation text"
+            XCTAssertTrue(store.toggle(updated))
+            XCTAssertTrue(FavoritesStore(fileURL: url).products.isEmpty)
+        }
+    }
+
+    func testCorruptFileIsPreservedWhenSavingIsAttempted() throws {
+        try withFile { url in
+            let original = Data("invalid saved data".utf8)
+            try original.write(to: url)
+            let store = FavoritesStore(fileURL: url)
+            XCTAssertNotNil(store.errorMessage)
+            XCTAssertFalse(store.toggle(Product.samples[0]))
+            XCTAssertEqual(try Data(contentsOf: url), original)
+        }
+    }
+
+    func testFailedDiskWriteDoesNotShowUnsavedHeartAsSaved() throws {
+        try withFile { url in
+            let store = FavoritesStore(fileURL: url)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            XCTAssertFalse(store.toggle(Product.samples[0]))
+            XCTAssertTrue(store.products.isEmpty)
+            XCTAssertNotNil(store.errorMessage)
+        }
+    }
+
+    func testDuplicateStoredIDsAreCollapsed() throws {
+        try withFile { url in
+            let product = Product.samples[0]
+            try JSONEncoder().encode([product, product]).write(to: url)
+            XCTAssertEqual(FavoritesStore(fileURL: url).products.count, 1)
+        }
+    }
+}
+
+@MainActor
+final class IntegratedHomeFlowTests: XCTestCase {
+    func testDemoDestinationWorksWithoutLiDAROrSavedResult() {
+        let model = HomeViewModel()
+        model.startScan()
+        XCTAssertTrue(model.isPresentingScan)
+        model.finishDemoScan()
+        XCTAssertFalse(model.isPresentingScan)
+        XCTAssertTrue(model.hasScannedSpace)
+        XCTAssertEqual(model.sheetDetent, .collapsed)
+        XCTAssertNil(model.savedScan)
+    }
+
+    func testScanAndProfileCannotPresentAtTheSameTime() {
+        let model = HomeViewModel()
+        model.openProfile()
+        XCTAssertTrue(model.isProfilePresented)
+        model.startScan()
+        XCTAssertFalse(model.isPresentingScan)
+        model.isProfilePresented = false
+        model.startScan()
+        model.openProfile()
+        XCTAssertTrue(model.isPresentingScan)
+        XCTAssertFalse(model.isProfilePresented)
+    }
+
+    func testFinishingDemoRetainsActualMeasurementsForProfile() {
+        let model = HomeViewModel()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let files = ScanFiles(directory: directory,
+                              json: directory.appendingPathComponent("room.json"),
+                              nativeJSON: directory.appendingPathComponent("captured-room.json"),
+                              model: nil, modelWarning: nil)
+        model.startScan()
+        model.acceptScan(document: .sample, files: files)
+        model.finishDemoScan()
+        XCTAssertEqual(model.savedScan?.id, RoomDocument.sample.id)
+        XCTAssertEqual(model.savedScan?.files.json, files.json)
+        XCTAssertTrue(model.hasScannedSpace)
+        XCTAssertFalse(model.isPresentingScan)
+    }
+
+    func testBackgroundCancellationRejectsPreviousProcessingCallbacks() {
+        let scanner = RoomScanner.preview(phase: .processing)
+        let token = scanner.scanID
+        scanner.cancel()
+        scanner.fail("Late processing error", token: token)
+        scanner.updateCounts(walls: 10, objects: 10, token: token)
+        XCTAssertEqual(scanner.phase, .idle)
+        XCTAssertNil(scanner.errorMessage)
+        XCTAssertEqual(scanner.wallCount, 0)
     }
 }

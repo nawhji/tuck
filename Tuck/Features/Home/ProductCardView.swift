@@ -6,7 +6,8 @@ struct ProductCardView: View {
     let product: Product
     let isSelected: Bool
     let onToggle: () -> Void
-    @State private var isLiked = false
+    @Environment(FavoritesStore.self) private var favorites
+    private var isLiked: Bool { favorites.contains(product.id) }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -55,7 +56,7 @@ struct ProductCardView: View {
     }
 
     private var likeButton: some View {
-        Button { isLiked.toggle() } label: {
+        Button { favorites.toggle(product) } label: {
             Image(systemName: isLiked ? "heart.fill" : "heart")
                 .font(.system(size: 20, weight: .light))
                 .foregroundStyle(isLiked ? .red : Color("GrayScale300"))
@@ -135,4 +136,5 @@ final class ImageLoader: @unchecked Sendable {
         ProductCardView(product: Product.samples[0], isSelected: true, onToggle: {})
         ProductCardView(product: Product.samples[1], isSelected: false, onToggle: {})
     }
+    .environment(FavoritesStore(fileURL: FileManager.default.temporaryDirectory.appendingPathComponent("tuck-preview-favorites.json")))
 }

@@ -1,5 +1,7 @@
 # tuck
 
+프로필·하트 저장 구현 및 적용 방법: [Profile integration](docs/profile-setup.md).
+
 홈 카메라의 RoomPlan 연결·저장된 방 복원 코드 및 Xcode 실행 안내는
 [RoomPlan 연결 안내](docs/roomplan-setup.md)를 참고하세요. 이 변경의 iOS 빌드·실기기 검증은 아직 필요합니다.
 

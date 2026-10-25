@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @State private var model: HomeViewModel
     @State private var showsSavedRoom = false
+    @State private var favorites = FavoritesStore()
     @GestureState private var dragOffset: CGFloat = 0
     @FocusState private var isInputFocused: Bool
 
@@ -21,15 +22,24 @@ struct HomeView: View {
         }
         .animation(.spring(duration: 0.35), value: isInputFocused)
         .preferredColorScheme(.light)
+        .environment(favorites)
+        .sheet(isPresented: $model.isProfilePresented) {
+            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites)
+        }
+        .onChange(of: model.isProfilePresented) { _, presented in
+            if presented { isInputFocused = false }
+        }
         .task { await model.restoreLatestScan() }
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
-        .alert("Saved room", isPresented: Binding(
-            get: { model.scanLoadError != nil },
-            set: { if !$0 { model.scanLoadError = nil } }
-        )) { Button("OK", role: .cancel) { model.scanLoadError = nil } }
-        message: { Text(model.scanLoadError ?? "") }
+        .alert("Tuck", isPresented: Binding(
+            get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom &&
+                (model.scanLoadError != nil || favorites.errorMessage != nil) },
+            set: { if !$0 { model.scanLoadError = nil; favorites.errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { model.scanLoadError = nil; favorites.errorMessage = nil }
+        } message: { Text(model.scanLoadError ?? favorites.errorMessage ?? "") }
         .fullScreenCover(isPresented: $model.isPresentingScan) {
             DemoScanView(
                 onFinish: { scan in
