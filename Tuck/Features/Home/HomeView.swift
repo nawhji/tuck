@@ -21,6 +21,7 @@ struct HomeView: View {
             sheetLayer
         }
         .animation(.spring(duration: 0.35), value: isInputFocused)
+        .preferredColorScheme(.light)
         .environment(favorites)
         .sheet(isPresented: $model.isProfilePresented) {
             ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites)
@@ -29,34 +30,35 @@ struct HomeView: View {
             if presented { isInputFocused = false }
         }
         .task { await model.restoreLatestScan() }
-        .onChange(of: model.isScanPresented) { _, presented in
-            if presented { isInputFocused = false }
-        }
-        .fullScreenCover(isPresented: $model.isScanPresented) {
-            ScanView(onSaved: { document, files in
-                model.acceptScan(document: document, files: files)
-            })
-        }
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
         .alert("Tuck", isPresented: Binding(
-            get: { !model.isProfilePresented && (model.scanLoadError != nil || favorites.errorMessage != nil) },
+            get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom &&
+                (model.scanLoadError != nil || favorites.errorMessage != nil) },
             set: { if !$0 { model.scanLoadError = nil; favorites.errorMessage = nil } }
         )) {
             Button("OK", role: .cancel) { model.scanLoadError = nil; favorites.errorMessage = nil }
         } message: { Text(model.scanLoadError ?? favorites.errorMessage ?? "") }
+        .fullScreenCover(isPresented: $model.isPresentingScan) {
+            DemoScanView(
+                onFinish: { scan in
+                    if let scan { model.acceptScan(document: scan.document, files: scan.files) }
+                    model.finishDemoScan()
+                },
+                onCancel: { model.isPresentingScan = false }
+            )
+        }
+        .onChange(of: model.isPresentingScan) { _, presented in
+            if presented { isInputFocused = false }
+        }
     }
 
     /// 방 영역과 헤더. 키보드가 올라와도 움직이지 않는다.
     private var stage: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
-                RoomStageView(
-                    hasScannedSpace: model.hasScannedSpace, onScanTap: model.startScan,
-                    modelURL: model.savedScan?.files.model,
-                    onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true }
-                )
+                RoomStageView(hasScannedSpace: model.hasScannedSpace, onScanTap: model.startScan, onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true })
                     .position(x: proxy.size.width / 2, y: stageCenterY(safeTop: proxy.safeAreaInsets.top))
                 HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile)
                     .padding(.top, max(proxy.safeAreaInsets.top + 2, 0))

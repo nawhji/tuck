@@ -153,3 +153,57 @@ final class FavoritesStoreTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class IntegratedHomeFlowTests: XCTestCase {
+    func testDemoDestinationWorksWithoutLiDAROrSavedResult() {
+        let model = HomeViewModel()
+        model.startScan()
+        XCTAssertTrue(model.isPresentingScan)
+        model.finishDemoScan()
+        XCTAssertFalse(model.isPresentingScan)
+        XCTAssertTrue(model.hasScannedSpace)
+        XCTAssertEqual(model.sheetDetent, .collapsed)
+        XCTAssertNil(model.savedScan)
+    }
+
+    func testScanAndProfileCannotPresentAtTheSameTime() {
+        let model = HomeViewModel()
+        model.openProfile()
+        XCTAssertTrue(model.isProfilePresented)
+        model.startScan()
+        XCTAssertFalse(model.isPresentingScan)
+        model.isProfilePresented = false
+        model.startScan()
+        model.openProfile()
+        XCTAssertTrue(model.isPresentingScan)
+        XCTAssertFalse(model.isProfilePresented)
+    }
+
+    func testFinishingDemoRetainsActualMeasurementsForProfile() {
+        let model = HomeViewModel()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let files = ScanFiles(directory: directory,
+                              json: directory.appendingPathComponent("room.json"),
+                              nativeJSON: directory.appendingPathComponent("captured-room.json"),
+                              model: nil, modelWarning: nil)
+        model.startScan()
+        model.acceptScan(document: .sample, files: files)
+        model.finishDemoScan()
+        XCTAssertEqual(model.savedScan?.id, RoomDocument.sample.id)
+        XCTAssertEqual(model.savedScan?.files.json, files.json)
+        XCTAssertTrue(model.hasScannedSpace)
+        XCTAssertFalse(model.isPresentingScan)
+    }
+
+    func testBackgroundCancellationRejectsPreviousProcessingCallbacks() {
+        let scanner = RoomScanner.preview(phase: .processing)
+        let token = scanner.scanID
+        scanner.cancel()
+        scanner.fail("Late processing error", token: token)
+        scanner.updateCounts(walls: 10, objects: 10, token: token)
+        XCTAssertEqual(scanner.phase, .idle)
+        XCTAssertNil(scanner.errorMessage)
+        XCTAssertEqual(scanner.wallCount, 0)
+    }
+}

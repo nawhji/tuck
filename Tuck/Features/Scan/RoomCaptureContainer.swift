@@ -12,7 +12,7 @@ struct RoomCaptureContainer: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> CaptureController {
         let controller = CaptureController()
-        controller.captureView.isModelEnabled = true
+        controller.captureView.isModelEnabled = false
         controller.captureView.delegate = context.coordinator
         controller.captureView.captureSession.delegate = context.coordinator
         controller.onAppear = { [weak scanner] view in scanner?.attach(view) }

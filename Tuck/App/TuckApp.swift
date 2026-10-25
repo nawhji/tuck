@@ -8,6 +8,7 @@ struct TuckApp: App {
         WindowGroup {
             ZStack {
                 HomeView()
+                    .preferredColorScheme(.light)
 
                 if showSplash {
                     SplashView()

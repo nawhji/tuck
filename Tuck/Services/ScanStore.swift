@@ -42,7 +42,7 @@ enum ScanStore {
                 directory: directory, json: json,
                 nativeJSON: directory.appendingPathComponent("captured-room.json"),
                 model: model,
-                modelWarning: model == nil ? "치수는 저장되어 있지만 3D 파일이 없어요. 다시 스캔해주세요." : nil
+                modelWarning: model == nil ? "Measurements are saved, but the 3D model is unavailable. Please scan again." : nil
             )
             scans.append(SavedScan(document: document, files: files))
         }
@@ -52,6 +52,6 @@ enum ScanStore {
 
     private enum StoreError: LocalizedError {
         case unreadable
-        var errorDescription: String? { "저장된 방을 읽지 못했어요. 새 스캔을 시작할 수 있어요." }
+        var errorDescription: String? { "Saved rooms could not be read. You can start a new scan." }
     }
 }

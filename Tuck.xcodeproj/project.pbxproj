@@ -34,6 +34,9 @@
 		C10000000000000000000040 /* FavoritesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000040 /* FavoritesStore.swift */; };
 		C10000000000000000000041 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000041 /* ProfileView.swift */; };
 		D00000000000000000000002 /* RoomScanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D00000000000000000000001 /* RoomScanTests.swift */; };
+		C30000000000000000000001 /* DemoScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000011 /* DemoScanView.swift */; };
+		C30000000000000000000002 /* DemoRoom.html in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000012 /* DemoRoom.html */; };
+		C30000000000000000000003 /* DemoRoomPreview.png in Resources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000013 /* DemoRoomPreview.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -78,6 +81,9 @@
 		C00000000000000000000041 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		D00000000000000000000001 /* RoomScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomScanTests.swift; sourceTree = "<group>"; };
 		D00000000000000000000003 /* TuckTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = TuckTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C30000000000000000000011 /* DemoScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoScanView.swift; sourceTree = "<group>"; };
+		C30000000000000000000012 /* DemoRoom.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = DemoRoom.html; sourceTree = "<group>"; };
+		C30000000000000000000013 /* DemoRoomPreview.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = DemoRoomPreview.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +159,7 @@
 			children = (
 				C00000000000000000000031 /* SavedRoomView.swift */,
 				A00000000000000000000065 /* ScanView.swift */,
+				C30000000000000000000011 /* DemoScanView.swift */,
 				A00000000000000000000067 /* RoomCaptureContainer.swift */,
 				A00000000000000000000066 /* RoomScanner.swift */,
 			);
@@ -185,6 +192,8 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000076 /* Assets.xcassets */,
+				C30000000000000000000013 /* DemoRoomPreview.png */,
+				C30000000000000000000012 /* DemoRoom.html */,
 				B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */,
 				A0000000000000000000006A /* Info.plist */,
 			);
@@ -309,6 +318,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A000000000000000000000CE /* Assets.xcassets in Resources */,
+				C30000000000000000000003 /* DemoRoomPreview.png in Resources */,
+				C30000000000000000000002 /* DemoRoom.html in Resources */,
 				B10000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -333,6 +344,7 @@
 				C10000000000000000000030 /* ScanStore.swift in Sources */,
 				A000000000000000000000C8 /* TuckApp.swift in Sources */,
 				A000000000000000000000C9 /* ScanView.swift in Sources */,
+				C30000000000000000000001 /* DemoScanView.swift in Sources */,
 				A000000000000000000000E1 /* SplashView.swift in Sources */,
 				A000000000000000000000CA /* RoomScanner.swift in Sources */,
 				A000000000000000000000CB /* RoomCaptureContainer.swift in Sources */,
@@ -410,7 +422,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = FY5DZ88692;
+				DEVELOPMENT_TEAM = LQC3L5H44F;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Tuck/Resources/Info.plist;
@@ -434,7 +446,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = FY5DZ88692;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Tuck/Resources/Info.plist;
@@ -458,7 +470,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = FY5DZ88692;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -479,7 +491,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = FY5DZ88692;
+				DEVELOPMENT_TEAM = ZDVNA8L6WW;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

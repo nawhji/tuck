@@ -6,7 +6,7 @@ enum SheetDetent {
     case expanded
 }
 
-/// Home 화면이 그리는 상태. 채팅은 Claude API, 스캔은 기기 내 RoomPlan에 연결된다. 가구 배치는 별도 작업이다.
+/// Home 화면이 그리는 상태. 채팅은 Claude API에 연결되어 있고, 스캔·시뮬레이션은 아직 연결되지 않았다.
 @Observable
 final class HomeViewModel {
     /// 로그인이 없는 서비스라 사용자 정보는 고정값이다.
@@ -14,7 +14,7 @@ final class HomeViewModel {
     let userInitial = "H"
 
     var hasScannedSpace = false
-    var isScanPresented = false
+    var isPresentingScan = false
     var isProfilePresented = false
     var savedScan: SavedScan?
     var scanLoadError: String?
@@ -34,8 +34,17 @@ final class HomeViewModel {
 
     // MARK: - Actions (미구현)
 
-    func startScan() { isScanPresented = true }
+    func startScan() {
+        guard !isProfilePresented else { return }
+        isPresentingScan = true
+    }
 
+    /// Demo destination is deliberately independent of RoomPlan success or support.
+    func finishDemoScan() {
+        hasScannedSpace = true
+        sheetDetent = .collapsed
+        isPresentingScan = false
+    }
     func acceptScan(document: RoomDocument, files: ScanFiles) {
         savedScan = SavedScan(document: document, files: files)
         hasScannedSpace = true
@@ -44,16 +53,15 @@ final class HomeViewModel {
     @MainActor
     func restoreLatestScan() async {
         do {
-            let scan = try await Task.detached(priority: .userInitiated) {
-                try ScanStore.latest()
-            }.value
+            let scan = try await Task.detached(priority: .userInitiated) { try ScanStore.latest() }.value
             guard !Task.isCancelled, savedScan == nil, let scan else { return }
             acceptScan(document: scan.document, files: scan.files)
-        } catch {
-            scanLoadError = error.localizedDescription
-        }
+        } catch { scanLoadError = error.localizedDescription }
     }
-    func openProfile() { isProfilePresented = true }
+    func openProfile() {
+        guard !isPresentingScan else { return }
+        isProfilePresented = true
+    }
 
     func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
