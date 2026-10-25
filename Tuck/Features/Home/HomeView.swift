@@ -180,7 +180,7 @@ struct HomeView: View {
             .allowsHitTesting(toolsVisible)
             ChatSheet(
                 messages: model.messages,
-                selectedProductID: model.selectedProductID, draft: $model.draft,
+                selectedProductID: model.selectedProductID, placedProductIDs: preview.placedProductIDs, draft: $model.draft,
                 isInputFocused: $isInputFocused, canSend: model.canSend,
                 dragGesture: sheetDrag(availableHeight: geometry.size.height),
                 onSend: {
@@ -189,12 +189,26 @@ struct HomeView: View {
                     model.send(contextProvider: {
                         try await preview.chatContext(roomID: roomID, roomName: roomName)
                     })
-                }, isResponding: model.isResponding, onStop: model.stopResponding, onSelect: model.toggleSelection,
+                }, isResponding: model.isResponding, onStop: model.stopResponding, onSelect: tryFurniture,
                 onOrder: model.placeOrder,
                 isMinimized: sheetHeight < 90,
                 onExpand: { withAnimation(.spring(duration: 0.35)) { model.sheetDetent = .collapsed } }
             )
             .frame(height: sheetHeight)
+        }
+    }
+
+    private func tryFurniture(_ product: Product) {
+        let scene = model.sceneID
+        Task { @MainActor in
+            do {
+                guard let added = try await preview.toggleProduct(product.id), model.sceneID == scene else { return }
+                if added { model.selectedProductID = product.id }
+                else if model.selectedProductID == product.id { model.selectedProductID = nil }
+            } catch is CancellationError {
+            } catch {
+                if model.sceneID == scene { saveError = error.localizedDescription }
+            }
         }
     }
 

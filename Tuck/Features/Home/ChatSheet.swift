@@ -4,6 +4,7 @@ import SwiftUI
 struct ChatSheet<Drag: Gesture>: View {
     let messages: [ChatMessage]
     let selectedProductID: Product.ID?
+    var placedProductIDs: Set<Product.ID>? = nil
     @Binding var draft: String
     var isInputFocused: FocusState<Bool>.Binding
     let canSend: Bool
@@ -121,7 +122,7 @@ struct ChatSheet<Drag: Gesture>: View {
                         AssistantText(text: text)
                     case .products(let products):
                         ForEach(products) { product in
-                            ProductCardView(product: product, isSelected: product.id == selectedProductID) {
+                            ProductCardView(product: product, isSelected: placedProductIDs?.contains(product.id) ?? (product.id == selectedProductID)) {
                                 onSelect(product)
                             }
                         }
