@@ -5,8 +5,9 @@ header{right:32px}canvas{width:100vw;height:calc(100vh - 205px)}.chat{width:calc
 /* Native SwiftUI owns the header and chat; the web view is the room only. */
 body{background:#ffffff!important}canvas{width:100vw!important;height:100dvh!important}
 header,.chat,.caption,.mobileTools,.panel{display:none!important}
-#axisIndicator{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 12px;border-radius:18px;background:#34383ce8;color:white;font:600 11px -apple-system,sans-serif;pointer-events:none;z-index:10}#axisIndicator[hidden]{display:none}</style>
-<style>#rotationHUD{position:absolute;bottom:max(12px,14vh);left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:6px;border-radius:28px;background:#fff;box-shadow:0 2px 12px #0002;z-index:20}#rotationHUD[hidden]{display:none}#rotationHUD button{border:0;border-radius:22px;background:#4a352b;color:#fff;width:44px;height:36px;font-size:23px;touch-action:manipulation}</style><div id="rotationHUD" hidden><button id="rotateLeft" aria-label="Rotate left 15 degrees">↶</button><button id="rotateRight" aria-label="Rotate right 15 degrees">↷</button></div><canvas id="c" aria-label="3D room preview"></canvas><header><h1>Tuck</h1><span class="avatar">H</span></header><div class="chat" id="chat"><button id="chatHandle" aria-label="Collapse chat panel"><span></span></button><div class="chatTitle">Harper’s Room</div><div class="bubble">Explore your room from every angle.</div><div class="chatHint">Drag to orbit · Pinch to zoom</div><div class="chatInput">Any new ideas? <span>↑</span></div></div>
+#axisIndicator{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:6px 12px;border-radius:18px;background:#34383ce8;color:white;font:600 11px -apple-system,sans-serif;pointer-events:none;z-index:10}#axisIndicator[hidden]{display:none}#roomScale{position:absolute;right:12px;top:12px;z-index:16;display:flex;align-items:center;flex-direction:column;gap:5px;padding:8px 10px 6px;border-radius:10px;background:#ffffffdf;color:#4a352b;pointer-events:none;font:500 11px -apple-system,BlinkMacSystemFont,sans-serif}#roomScale[hidden]{display:none}#roomScaleBar{height:8px;border-bottom:1.5px solid #4a352b;border-left:1.5px solid #4a352b;border-right:1.5px solid #4a352b}#roomScale small{font-size:9px;color:#8b827a}
+</style>
+<style>#rotationHUD{position:absolute;bottom:max(12px,14vh);left:50%;transform:translateX(-50%);display:flex;gap:8px;padding:6px;border-radius:28px;background:#fff;box-shadow:0 2px 12px #0002;z-index:20}#rotationHUD[hidden]{display:none}#rotationHUD button{border:0;border-radius:22px;background:#4a352b;color:#fff;width:44px;height:36px;font-size:23px;touch-action:manipulation}</style><div id="rotationHUD" hidden><button id="rotateLeft" aria-label="Rotate left 15 degrees">↶</button><button id="rotateRight" aria-label="Rotate right 15 degrees">↷</button></div><div id="roomScale" role="img" aria-label="Scale at room floor center"><span id="roomScaleLabel"></span><div id="roomScaleBar"></div><small>Floor center</small></div><canvas id="c" aria-label="3D room preview"></canvas><header><h1>Tuck</h1><span class="avatar">H</span></header><div class="chat" id="chat"><button id="chatHandle" aria-label="Collapse chat panel"><span></span></button><div class="chatTitle">Harper’s Room</div><div class="bubble">Explore your room from every angle.</div><div class="chatHint">Drag to orbit · Pinch to zoom</div><div class="chatInput">Any new ideas? <span>↑</span></div></div>
 <div class="caption">Each piece is a separate object.<br>USDZ · GLB Individual assets and layout JSON included</div>
 <script>
 window.addEventListener('error',e=>{window.webkit?.messageHandlers?.previewError?.postMessage(String(e.message||'Preview unavailable'))});
@@ -79,6 +80,155 @@ function world(v,i){let c=Math.cos(i.yawRadians),s=Math.sin(i.yawRadians);return
 function triangleHit(r,a,b,c){let e1=sub(b,a),e2=sub(c,a),p=cross(r.dir,e2),det=dot(e1,p);if(Math.abs(det)<1e-8)return Infinity;let t=sub(r.origin,a),u=dot(t,p)/det;if(u<0||u>1)return Infinity;let q=cross(t,e1),v=dot(r.dir,q)/det;if(v<0||u+v>1)return Infinity;let d=dot(e2,q)/det;return d>.001?d:Infinity}
 function pick(r){let best=null,dist=Infinity;for(let i of items)for(let p of assetMap.get(i.assetId).parts)for(let f of p.faces)for(let k=1;k<f.length-1;k++){let d=triangleHit(r,...[f[0],f[k],f[k+1]].map(j=>world(p.vertices[j],i)));if(d<dist){dist=d;best=i}}return best?{item:best,point:r.origin.map((v,k)=>v+dist*r.dir[k])}:null}
 function plane(r,height){if(Math.abs(r.dir[1])<1e-5)return null;let t=(height-r.origin[1])/r.dir[1];return t>0?r.origin.map((v,k)=>v+t*r.dir[k]):null}
+// Geometry operates in meters. Visual dimensions are rendered in screen pixels.
+const layoutBoundsCache=new WeakMap();
+let snapSurfaceCache=null;
+function localFurnitureBounds(asset){
+ let b=layoutBoundsCache.get(asset);
+ if(!b){b=boundsOf(asset.parts);layoutBoundsCache.set(asset,b)}
+ return b;
+}
+function furnitureBox(item){
+ const b=localFurnitureBounds(assetMap.get(item.assetId)),c=Math.cos(item.yawRadians),s=Math.sin(item.yawRadians);
+ return{center:world(b.lo.map((v,k)=>(v+b.hi[k])/2),item),half:b.lo.map((v,k)=>(b.hi[k]-v)/2),axes:[[c,0,-s],[0,1,0],[s,0,c]]};
+}
+function boxRadius(box,n){return box.half.reduce((sum,h,k)=>sum+h*Math.abs(dot(box.axes[k],n)),0)}
+function boxesOverlap(a,b){
+ // Yaw-only oriented bounds: four horizontal SAT axes plus vertical overlap.
+ const separation=sub(b.center,a.center);
+ return[a.axes[0],a.axes[2],b.axes[0],b.axes[2],[0,1,0]].every(n=>boxRadius(a,n)+boxRadius(b,n)-Math.abs(dot(separation,n))>.002);
+}
+let wallCollisionCache=null;
+function triangleOverlapsBox(triangle,box){
+ const points=triangle.map(p=>box.axes.map(axis=>dot(sub(p,box.center),axis)));
+ const edges=[sub(points[1],points[0]),sub(points[2],points[1]),sub(points[0],points[2])];
+ const basis=[[1,0,0],[0,1,0],[0,0,1]],normal=cross(edges[0],edges[1]);
+ const axes=[...basis,normal,...edges.flatMap(edge=>basis.map(axis=>cross(edge,axis)))];
+ for(const axis of axes){
+  const length=Math.hypot(...axis);if(length<1e-9)continue;
+  const values=points.map(p=>dot(p,axis)),radius=box.half.reduce((sum,h,k)=>sum+h*Math.abs(axis[k]),0),epsilon=.002*length;
+  if(Math.min(...values)>=radius-epsilon||Math.max(...values)<=-radius+epsilon)return false;
+ }
+ return true;
+}
+function wallCollisionMeshes(){
+ if(wallCollisionCache?.parts===activeRoomParts)return wallCollisionCache.meshes;
+ const meshes=[];
+ for(const part of activeRoomParts){
+  if(!/wall|atticroomslope|continuouscloset/i.test(part.name))continue;
+  const triangles=[];
+  for(const face of part.faces)for(let k=1;k<face.length-1;k++){
+   const t=[part.vertices[face[0]],part.vertices[face[k]],part.vertices[face[k+1]]];
+   if(Math.hypot(...cross(sub(t[1],t[0]),sub(t[2],t[0])))>1e-9)triangles.push(t);
+  }
+  meshes.push({triangles,bounds:boundsOf([part]),singleSided:!!part.singleSided});
+ }
+ wallCollisionCache={parts:activeRoomParts,meshes};return meshes;
+}
+function pointInsideWall(point,mesh){
+ if(mesh.singleSided||point.some((v,k)=>v<=mesh.bounds.lo[k]+.002||v>=mesh.bounds.hi[k]-.002))return false;
+ const ray={origin:point,dir:norm([.723,.317,.617])},distances=[];
+ for(const triangle of mesh.triangles){const d=triangleHit(ray,...triangle);if(Number.isFinite(d)&&!distances.some(t=>Math.abs(t-d)<1e-6))distances.push(d)}
+ return distances.length%2===1;
+}
+function overlapsWall(box){
+ for(const mesh of wallCollisionMeshes()){
+  if([0,1,2].some(k=>{const axis=[0,0,0];axis[k]=1;const r=boxRadius(box,axis);return box.center[k]+r<=mesh.bounds.lo[k]+.002||box.center[k]-r>=mesh.bounds.hi[k]-.002}))continue;
+  if(mesh.triangles.some(t=>triangleOverlapsBox(t,box))||pointInsideWall(box.center,mesh))return true;
+ }
+ return false;
+}
+function overlapHighlightIDs(){
+ const ids=new Set(),boxes=items.map(furnitureBox);
+ for(let i=0;i<items.length;i++){
+  if(overlapsWall(boxes[i]))ids.add(items[i].instanceId);
+  for(let j=i+1;j<items.length;j++)if(boxesOverlap(boxes[i],boxes[j])){ids.add(items[i].instanceId);ids.add(items[j].instanceId)}
+ }
+ return ids;
+}
+function snapSurfaces(){
+ if(snapSurfaceCache?.parts===activeRoomParts)return snapSurfaceCache.faces;
+ const faces=[];
+ for(const part of activeRoomParts){
+  const floor=/floor/i.test(part.name)&&!part.wall;
+  const wall=/wall|atticroomslope|continuouscloset/i.test(part.name);
+  if(!floor&&!wall)continue; // Never use furniture, doors, rails or window frames.
+  for(const face of part.faces){
+   const points=face.map(i=>part.vertices[i]);
+   const raw=cross(sub(points[1],points[0]),sub(points[2],points[0]));
+   if(Math.hypot(...raw)<1e-8)continue;
+   const normal=norm(raw);
+   if(floor&&normal[1]<.99)continue; // Top of the floor only.
+   if(wall&&Math.abs(normal[1])>.95)continue; // No wall caps/ceiling snapping.
+   faces.push({points,normal,floor});
+  }
+ }
+ snapSurfaceCache={parts:activeRoomParts,faces};return faces;
+}
+function pointInSurface(point,surface){
+ // Triangle fan avoids treating the infinite extension of a wall as a surface.
+ const a=surface.points[0];
+ for(let k=1;k<surface.points.length-1;k++){
+  const u=sub(surface.points[k],a),v=sub(surface.points[k+1],a),w=sub(point,a);
+  const uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),d=uu*vv-uv*uv;
+  if(d<1e-12)continue;
+  const x=(wu*vv-wv*uv)/d,y=(wv*uu-wu*uv)/d;
+  if(x>=-1e-6&&y>=-1e-6&&x+y<=1+1e-6)return true;
+ }
+ return false;
+}
+function snapToStructure(item,axis,referencePosition=item.position){
+ const box=furnitureBox(item),reference={...item,position:referencePosition},referenceCenter=furnitureBox(reference).center;
+ let best=null;
+ for(const surface of snapSurfaces()){
+  if(surface.floor&&axis!==1)continue;
+  let n=surface.normal;
+  if(!surface.floor&&dot(sub(referenceCenter,surface.points[0]),n)<0)n=n.map(v=>-v);
+  if(Math.abs(n[axis])<.25)continue;
+  const gap=dot(sub(box.center,surface.points[0]),n)-boxRadius(box,n);
+  const delta=-gap/n[axis];
+  if(Math.abs(delta)>.065)continue;
+  const contact=box.center.map((v,k)=>v+(k===axis?delta:0)-n[k]*boxRadius(box,n));
+  if(!pointInSurface(contact,surface))continue;
+  if(best===null||Math.abs(delta)<Math.abs(best))best=delta;
+ }
+ if(best!==null)item.position[axis]+=best;
+ return best;
+}
+// Restore the saved furniture checkpoint while retaining the current camera.
+function restoreSavedLayout(data){
+ const view={yaw,pitch,radius};
+ loadLayout(data);
+ yaw=view.yaw;pitch=view.pitch;radius=view.radius;
+ autoWalls=true;showRoof=true;
+ setFurnitureMoveEnabled(false);
+ return layout();
+}
+function floorScaleAnchor(){
+ const floors=activeRoomParts.filter(part=>/floor/i.test(part.name));
+ const b=boundsOf(floors.length?floors:activeRoomParts);
+ return[(b.lo[0]+b.hi[0])/2,floors.length?b.hi[1]:b.lo[1],(b.lo[2]+b.hi[2])/2];
+}
+function floorScale(){
+ const anchor=floorScaleAnchor(),eye=camera(),forward=norm(sub(sceneTarget,eye)),right=norm(cross(forward,[0,1,0]));
+ const a=project(anchor),b=project(anchor.map((v,k)=>v+right[k]*.0254));
+ if(!a||!b)return null;
+ const pixelsPerInch=Math.hypot(b[0]-a[0],b[1]-a[1]);
+ if(!(pixelsPerInch>0))return null;
+ const target=Math.min(100,canvas.getBoundingClientRect().width*.28),raw=target/pixelsPerInch;
+ const exponent=Math.floor(Math.log10(raw)),power=10**exponent,ratio=raw/power;
+ const inches=(ratio>=5?5:ratio>=2?2:1)*power;
+ const value=Number(inches.toPrecision(8));
+ return{inches:value,pixels:value*pixelsPerInch,pixelsPerInch,anchor,label:value.toLocaleString('en-US',{maximumFractionDigits:6})+' in'};
+}
+function updateScaleBar(){
+ const node=document.getElementById('roomScale');if(!node)return;
+ const scale=floorScale();node.hidden=!scale;if(!scale)return;
+ const bar=document.getElementById('roomScaleBar'),label=document.getElementById('roomScaleLabel');
+ if(bar)bar.style.width=scale.pixels+'px';if(label)label.textContent=scale.label;
+ node.setAttribute('aria-label',scale.label+' at the center of the room floor');
+}
+
 // World-axis movement. The furniture's geometric center is a hidden pivot.
 const axisVectors=[[1,0,0],[0,1,0],[0,0,1]],axisNames=['X','Y','Z'];
 let activeAxis=null,activeDirection=1,pinchGesture=false;
@@ -121,7 +271,7 @@ canvas.addEventListener('pointermove',e=>{
   const axis=dragging.axis,current=axisParameter(ray(e.clientX,e.clientY),dragging.center,axis);let distance;
   if(current!==null&&dragging.startParameter!==null)distance=current-dragging.startParameter;
   else{const s=screenAxis(dragging.center,axis);if(!s)return;distance=(dx*s.unit[0]+dy*s.unit[1])/s.length}
-  if(Number.isFinite(distance)){if(dragging.previousDistance===undefined&&Math.abs(distance)>1e-5)activeDirection=Math.sign(distance);dragging.previousDistance=distance;item.position=[...dragging.position];item.position[axis]+=distance;sync()}
+  if(Number.isFinite(distance)){if(dragging.previousDistance===undefined&&Math.abs(distance)>1e-5)activeDirection=Math.sign(distance);dragging.previousDistance=distance;item.position=[...dragging.position];item.position[axis]+=distance;snapToStructure(item,axis,dragging.position);sync()}
  }else{yaw-=(e.clientX-old[0])*.009;pitch=Math.max(.12,Math.min(1.48,pitch+(e.clientY-old[1])*.007))}
  dirty=true;
 });
@@ -134,7 +284,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();radius=Math.max(3.4,Math.
 $('reverse').onclick=()=>{yaw=.78;pitch=.65;dirty=true};$('top').onclick=()=>{pitch=1.35;dirty=true};
 $('walls').onclick=e=>{autoWalls=!autoWalls;e.target.classList.toggle('active',autoWalls);dirty=true};$('roof').onclick=e=>{showRoof=!showRoof;e.target.classList.toggle('active',showRoof);dirty=true};$('reset').onclick=()=>{yaw=-.72;pitch=.62;radius=7.5;dirty=true};
 function resize(){let d=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(canvas.clientWidth*d);canvas.height=Math.round(canvas.clientHeight*d);gl.viewport(0,0,canvas.width,canvas.height);dirty=true}addEventListener('resize',resize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(canvas);resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(1,1,1,1);
-function draw(objects,m,eye,highlight=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uh,p.map?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness||.8);gl.uniform3fv(uc,highlight?p.color.map((v,k)=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
+function draw(objects,m,eye,highlight=false,overlap=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uh,p.map&&!overlap?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1f(uk,overlap?5:(p.materialKind||0));gl.uniform1f(ur,p.roughness||.8);gl.uniform3fv(uc,overlap?[.95,.12,.10]:highlight?p.color.map((v,k)=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
 // A real directional shadow pass, shared by the room and every movable instance.
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
 let lightMatrix=mul(ortho(-4.8,4.8,-4.8,4.8,.1,22),look([-4.5,9,6],[0,.5,0]));
@@ -145,7 +295,7 @@ const shadowBuffer=gl.createFramebuffer(),shadowDepth=gl.createRenderbuffer();gl
 function hidden(p,eye){if(p.wall==='scan')return autoWalls&&dot(p.cutawayNormal,sub(eye,p.cutawayCenter))>0;return(p.wall==='roof'&&!showRoof)||(autoWalls&&p.wall&&((p.wall==='front'&&eye[2]>0)||(p.wall==='back'&&eye[2]<0)||(p.wall==='left'&&eye[0]<0)||(p.wall==='right'&&eye[0]>0)))}
 function shadowDraw(objects,m,eye){gl.uniformMatrix4fv(sud,false,m);for(let p of objects){if(hidden(p,eye)||p.materialKind===4)continue;gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(sap);gl.vertexAttribPointer(sap,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
 function render(){if(dirty){dirty=false;let eye=camera();gl.bindFramebuffer(gl.FRAMEBUFFER,shadowBuffer);gl.viewport(0,0,2048,2048);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(shadowProgram);gl.disableVertexAttribArray(an);gl.disableVertexAttribArray(at);gl.uniformMatrix4fv(sul,false,lightMatrix);shadowDraw(roomObjects,identity,eye);for(let i of items)shadowDraw(assetMap.get(i.assetId).objects,model(i),eye);
-gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,sceneTarget)));draw(roomObjects,identity,eye);for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected);drawAxisGizmo(eye)}requestAnimationFrame(render)}
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,sceneTarget)));draw(roomObjects,identity,eye);const overlap=overlapHighlightIDs();for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected,overlap.has(i.instanceId));drawAxisGizmo(eye);updateScaleBar()}requestAnimationFrame(render)}
 // Scanned-room adapter. Raw RoomPlan geometry stays immutable; editor items carry changes.
 let scannedSource=null;
 let activeRoomParts=room.parts;
@@ -339,7 +489,7 @@ function chatContext(){
  })):room.parts.map((p,k)=>chatGeometry('sample-structure-'+k,'structure',null,null,[p],identityPose));
  return{roomID:'editor',roomName:'Room',revision:'pending',source:scannedSource?'scan_editor':'sample_editor',units:'meters',coordinateSystem:'right-handed-y-up',selectedObjectID:selected||null,objects,structures};
 }
-window.tuckEditor={chatContext,add,layout,loadLayout,loadScannedRoom,rotateSelected:rotateStep,setFurnitureMoveEnabled,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
+window.tuckEditor={restoreSavedLayout,overlapState:()=>[...overlapHighlightIDs()],overlapsWall,triangleOverlapsBox,floorScale,floorScaleAnchor,furnitureBox,boxesOverlap,snapToStructure,snapSurfaces,chatContext,add,layout,loadLayout,loadScannedRoom,rotateSelected:rotateStep,setFurnitureMoveEnabled,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
 project,boundsCenter,screenAxis,inferAxis,axisParameter,gizmoTransform,furnitureAxisLengths,
 interactionState:()=>({sourceRoomID:scannedSource?.id??null,furnitureMoveEnabled,selected,axis:activeAxis,direction:activeDirection,dragging:dragging?{id:dragging.id,axis:dragging.axis}:null,camera:{yaw,pitch,radius}}),
 setCamera:(y,p,r)=>{yaw=y;pitch=p;radius=r;showAxis(null);dirty=true}};

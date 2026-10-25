@@ -5,6 +5,7 @@ import WebKit
 final class RoomPreviewController: ObservableObject {
     @Published private(set) var placedProductIDs: Set<String> = []
     private var pendingProducts = Set<String>()
+    private var isResetting = false
     private var generation = UUID()
     private weak var webView: WKWebView?
     private var isReady = false
@@ -15,6 +16,7 @@ final class RoomPreviewController: ObservableObject {
 
     func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool, scannedRoom: RoomDocument? = nil) {
         generation = UUID()
+        isResetting = false
         webView = view
         isReady = false
         pendingProducts.removeAll()
@@ -28,6 +30,7 @@ final class RoomPreviewController: ObservableObject {
         guard webView === view else { return }
         webView = nil
         generation = UUID()
+        isResetting = false
         pendingProducts.removeAll()
         isReady = false
         initialSnapshot = nil
@@ -71,7 +74,7 @@ final class RoomPreviewController: ObservableObject {
 
     /// Keeps the original Try/Remove card; only connects it to the existing room.
     func toggleProduct(_ id: String) async throws -> Bool? {
-        guard isReady, let view = webView else { throw RoomLibraryError.previewNotReady }
+        guard isReady, !isResetting, let view = webView else { throw RoomLibraryError.previewNotReady }
         guard !pendingProducts.contains(id) else { return nil }
         guard FurnitureModelLibrary.supports(id) else { throw FurniturePlacementError.missingModel(id) }
         let token = generation
@@ -116,7 +119,7 @@ final class RoomPreviewController: ObservableObject {
     }
 
     func discardChanges() async throws {
-        guard isReady, let webView, let initialSnapshot else { throw RoomLibraryError.previewNotReady }
+        guard isReady, !isResetting, pendingProducts.isEmpty, let webView, let initialSnapshot else { throw RoomLibraryError.previewNotReady }
         let json = String(decoding: try JSONEncoder().encode(initialSnapshot), as: UTF8.self)
         _ = try await webView.evaluateJavaScript("window.tuckEditor.loadLayout(\(json))")
         updateProductIDs(initialSnapshot)
@@ -124,8 +127,23 @@ final class RoomPreviewController: ObservableObject {
         try await applyMoveMode()
     }
 
+    /// Restore the most recent saved furniture checkpoint without changing the camera.
+    func resetToSavedState() async throws {
+        guard isReady, !isResetting, pendingProducts.isEmpty,
+              let view = webView, let initialSnapshot else { throw RoomLibraryError.previewNotReady }
+        let token = generation
+        isResetting = true
+        defer { if generation == token { isResetting = false } }
+        let json = String(decoding: try JSONEncoder().encode(initialSnapshot), as: UTF8.self)
+        _ = try await view.callAsyncJavaScript("window.tuckEditor.restoreSavedLayout(JSON.parse(json)); return true;",
+            arguments: ["json": json], in: nil, contentWorld: .page)
+        try check(view, token)
+        updateProductIDs(initialSnapshot)
+        moveEnabled = false
+    }
+
     func chatContext(roomID: String, roomName: String) async throws -> RoomChatContext {
-        guard isReady, let view = webView else { throw RoomLibraryError.previewNotReady }
+        guard isReady, !isResetting, let view = webView else { throw RoomLibraryError.previewNotReady }
         let value = try await view.evaluateJavaScript("JSON.stringify(window.tuckEditor.chatContext())")
         guard webView === view, isReady, let json = value as? String else { throw RoomLibraryError.previewNotReady }
         var context = try JSONDecoder().decode(RoomChatContext.self, from: Data(json.utf8))
@@ -137,7 +155,7 @@ final class RoomPreviewController: ObservableObject {
     }
 
     func snapshot() async throws -> RoomLayoutSnapshot {
-        guard isReady, pendingProducts.isEmpty, let webView else { throw RoomLibraryError.previewNotReady }
+        guard isReady, !isResetting, pendingProducts.isEmpty, let webView else { throw RoomLibraryError.previewNotReady }
         let value = try await webView.evaluateJavaScript("JSON.stringify(window.tuckEditor.layout())")
         guard let json = value as? String, let data = json.data(using: .utf8) else {
             throw RoomLibraryError.invalidLayout

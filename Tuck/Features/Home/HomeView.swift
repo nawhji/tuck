@@ -19,6 +19,7 @@ struct HomeView: View {
     @State private var saveError: String?
     @State private var isSavingRoom = false
     @State private var isLoadingRooms = false
+    @State private var isResettingRoom = false
     @State private var showsRoomLibrary = false
     @State private var queuedRoomSelection: RoomLibraryEntry?
     @State private var roomAfterLeaving: RoomLibraryEntry?
@@ -140,13 +141,13 @@ struct HomeView: View {
                           initialLayout: model.activeLayout,
                           scannedRoom: model.activeLayout == nil ? model.savedScan?.document : model.activeLayout?.scannedRoom)
                 .id(model.sceneID)
-                .allowsHitTesting(!isLoadingRooms && !isSavingRoom)
+                .allowsHitTesting(!isLoadingRooms && !isSavingRoom && !isResettingRoom)
                 .frame(width: viewport.width, height: viewport.height)
                 .position(x: geometry.size.width / 2, y: top + viewport.height / 2)
             HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile,
                        roomName: model.roomDisplayName, onRoomsTap: openRoomLibrary,
-                       roomsEnabled: !isLoadingRooms && !isSavingRoom)
-                .disabled(isLoadingRooms || isSavingRoom)
+                       roomsEnabled: !isLoadingRooms && !isSavingRoom && !isResettingRoom)
+                .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
                 .padding(.top, 8)
 
         }
@@ -170,14 +171,17 @@ struct HomeView: View {
                         .allowsHitTesting(false)
                 }
                 HStack(spacing: 10) {
-                    if model.hasScannedSpace { moveButton }
+                    if model.hasScannedSpace {
+                        resetButton
+                        moveButton
+                    }
                     cameraButton
                 }
             }
             .padding(.trailing, 16).padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .opacity(toolsVisible ? 1 : 0)
-            .allowsHitTesting(toolsVisible)
+            .allowsHitTesting(toolsVisible && !isResettingRoom)
             ChatSheet(
                 messages: model.messages,
                 selectedProductID: model.selectedProductID, placedProductIDs: preview.placedProductIDs, draft: $model.draft,
@@ -199,6 +203,7 @@ struct HomeView: View {
     }
 
     private func tryFurniture(_ product: Product) {
+        guard !isResettingRoom else { return }
         let scene = model.sceneID
         Task { @MainActor in
             do {
@@ -212,6 +217,32 @@ struct HomeView: View {
         }
     }
 
+    private var resetButton: some View {
+        Button("Reset", action: resetRoom)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color("TuckBrown"))
+            .padding(.horizontal, 14).frame(height: 42)
+            .background(.white, in: Capsule())
+            .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 1))
+            .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
+            .accessibilityLabel("Restore last saved furniture layout")
+    }
+
+    private func resetRoom() {
+        guard !isResettingRoom, !isLoadingRooms, !isSavingRoom else { return }
+        isResettingRoom = true
+        Task { @MainActor in
+            defer { isResettingRoom = false }
+            do {
+                try await preview.resetToSavedState()
+                resetEditorInteraction()
+                model.selectedProductID = nil
+                model.isSimulating = false
+            } catch is CancellationError {
+            } catch { saveError = error.localizedDescription }
+        }
+    }
+
     private var cameraButton: some View {
         Button(action: requestScan) {
             Image(systemName: "camera")
@@ -219,7 +250,7 @@ struct HomeView: View {
                 .frame(width: 42, height: 42)
                 .background(Color(.systemGray3), in: Circle())
         }
-        .disabled(isLoadingRooms || isSavingRoom)
+        .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
         .accessibilityLabel("Scan space")
     }
 
@@ -242,7 +273,7 @@ struct HomeView: View {
                     }
                 }
         }
-        .disabled(isLoadingRooms || isSavingRoom)
+        .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
         .accessibilityLabel("Furniture move mode")
         .accessibilityValue(moveEnabled ? "On" : "Off")
     }
