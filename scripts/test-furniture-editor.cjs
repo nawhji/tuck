@@ -10,7 +10,7 @@ const dataScript = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const editorScript = fs.readFileSync(path.join(root, 'Tuck/Resources/DemoFurniture.js'), 'utf8');
 
 function roomContext({normalMaps = true} = {}) {
-  const ids = new Map(), events = [], draws = [], materials = [], uniforms = new Map(), textures = new Map();
+  const ids = new Map(), events = [], draws = [], materials = [], images = [], uniforms = new Map(), textures = new Map();
   let activeTexture;
   let constant = 100, boundBuffer, nextID = 0;
   const constants = new Map(), pointers = new Map(), enabled = new Set();
@@ -38,7 +38,7 @@ function roomContext({normalMaps = true} = {}) {
           `Attribute ${index} buffer is too small`);
       }
       draws.push(count);
-      if (enabled.has(2)) materials.push({color: uniforms.get('uColor'), normal: uniforms.get('uHasNormalMap'),
+      if (enabled.has(2)) materials.push({color: uniforms.get('uColor'), original: uniforms.get('uOriginalAppearance'), normal: uniforms.get('uHasNormalMap'),
         roughness: uniforms.get('uHasRoughnessMap'), normalTexture: textures.get(gl.TEXTURE2),
         roughnessTexture: textures.get(gl.TEXTURE3)});
     },
@@ -73,7 +73,7 @@ function roomContext({normalMaps = true} = {}) {
   for (const id of ['c', 'chatHandle', 'axisIndicator']) { const el = new Element(id === 'c' ? 'canvas' : 'div'); el.id = id; }
   class Image {
     constructor() { this.width = this.height = 2; }
-    set src(value) { queueMicrotask(() => value.startsWith('data:image/') ? this.onload() : this.onerror()); }
+    set src(value) { images.push(value); queueMicrotask(() => value.startsWith('data:image/') ? this.onload() : this.onerror()); }
   }
   const context = vm.createContext({console, document, Image,
     Option: function(text, value) { this.text = text; this.value = value; },
@@ -88,7 +88,7 @@ function roomContext({normalMaps = true} = {}) {
   context.window = context;
   vm.runInContext(dataScript, context, {filename: 'DemoRoom-data.js'});
   vm.runInContext(editorScript, context, {filename: 'DemoFurniture.js'});
-  return {context, api: context.tuckFurniture, editor: context.tuckEditor, events, ids, draws, materials,
+  return {context, api: context.tuckFurniture, editor: context.tuckEditor, events, ids, draws, materials, images,
     body: document.body,
     frame: () => context.nextFrame(),
     pointer: (name, id, x, y) => {
@@ -134,13 +134,14 @@ const clean = value => JSON.parse(JSON.stringify(value));
   assert(a.materials.length >= 3);
   for (const material of a.materials) {
     assert.deepEqual(material.color, [.5,.3,.15], 'Selection must not recolor an original chair');
-    assert.equal(material.normal, 1); assert.equal(material.roughness, 1);
-    assert(material.normalTexture && material.roughnessTexture);
+    assert.equal(material.original, 1);
+    assert.equal(material.normal, 0); assert.equal(material.roughness, 0);
   }
+  assert(a.images.every(url => url === 'data:image/png;base64,fixture'), 'Only original color textures are loaded for the three chairs');
   const fallback = roomContext({normalMaps: false});
   await fallback.api.register(fixture(ids[0])); fallback.api.tryProduct(ids[0]); fallback.frame();
   assert(fallback.materials.length > 0);
-  assert(fallback.materials.every(material => material.normal === 0 && material.roughness === 1));
+  assert(fallback.materials.every(material => material.original === 1 && material.normal === 0 && material.roughness === 0));
   const product = api.layout().items.find(i => i.productID === ids[0]);
   editor.setTransform(product.instanceId, [0,0,.15], .3);
   api.select(product.instanceId); api.rename('My reading chair'); api.rotate(15);
