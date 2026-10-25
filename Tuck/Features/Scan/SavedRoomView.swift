@@ -14,9 +14,9 @@ struct SavedRoomPreview: View {
                 SceneView(scene: scene, options: [.allowsCameraControl, .autoenablesDefaultLighting])
                     .accessibilityLabel("Scanned room. Drag to rotate and pinch to zoom.")
             } else if let errorMessage {
-                ContentUnavailableView("3D를 열지 못했어요", systemImage: "cube", description: Text(errorMessage))
+                ContentUnavailableView("Could not open the 3D model", systemImage: "cube", description: Text(errorMessage))
             } else {
-                ProgressView("3D 불러오는 중…")
+                ProgressView("Loading 3D model…")
             }
         }
         .task(id: url) {
@@ -46,7 +46,7 @@ struct SavedRoomPreview: View {
                 scene = loaded
             } catch {
                 guard !Task.isCancelled else { return }
-                errorMessage = "치수 목록은 계속 확인할 수 있어요. \(error.localizedDescription)"
+                errorMessage = "You can still view the measurements. \(error.localizedDescription)"
             }
         }
     }
@@ -68,28 +68,28 @@ struct SavedRoomView: View {
                     Text(warning).font(.footnote).foregroundStyle(.secondary)
                 }
                 Text(scan.document.capturedAt, style: .date).font(.caption).foregroundStyle(.secondary)
-                Text("가로 × 높이 × 깊이 · 요소의 로컬 축 기준 추정치")
+                Text("Width × height × depth · estimated in local axes")
                     .font(.caption).foregroundStyle(.secondary)
                 List {
-                    Section("가구") {
-                        if scan.document.objects.isEmpty { Text("인식된 가구가 없어요.") }
+                    Section("Furniture") {
+                        if scan.document.objects.isEmpty { Text("No furniture detected.") }
                         ForEach(scan.document.objects) { item in measurement(item) }
                     }
-                    Section("벽·문·창문·바닥") {
+                    Section("Walls, doors, windows and floors") {
                         ForEach(scan.document.structures) { item in measurement(item) }
                     }
                 }
                 .listStyle(.plain)
                 HStack {
-                    ShareLink("치수 JSON 공유", item: scan.files.json)
-                    if let model = scan.files.model { ShareLink("3D 공유", item: model) }
+                    ShareLink("Share measurements", item: scan.files.json)
+                    if let model = scan.files.model { ShareLink("Share 3D model", item: model) }
                 }
                 .buttonStyle(.bordered)
             }
             .padding()
-            .navigationTitle("저장된 방")
+            .navigationTitle("Saved room")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("닫기") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 
