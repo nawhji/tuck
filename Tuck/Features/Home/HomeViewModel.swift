@@ -24,7 +24,7 @@ enum HomeSheetLayout {
     }
 }
 
-/// Home 화면이 그리는 상태. 채팅은 Claude API에 연결되어 있고, 스캔·시뮬레이션은 아직 연결되지 않았다.
+/// Home chat and local scanned-room editor state.
 @Observable
 final class HomeViewModel {
     /// 로그인이 없는 서비스라 사용자 정보는 고정값이다.
@@ -34,6 +34,9 @@ final class HomeViewModel {
     var hasScannedSpace = false
     var isPresentingScan = false
     var isProfilePresented = false
+    var sceneID = UUID()
+    var activeLayout: RoomLayoutSnapshot?
+    var activeRoomName: String?
     var savedScan: SavedScan?
     var scanLoadError: String?
     var isSimulating = false
@@ -48,25 +51,48 @@ final class HomeViewModel {
     private var roomGeneration = 0
     private var responseTask: Task<Void, Never>?
 
-    var sheetTitle: String { "\(userName)’s Room" }
+    var sheetTitle: String { activeRoomName ?? "\(userName)’s Room" }
     var canSend: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResponding }
 
-    // MARK: - Actions (미구현)
+    // MARK: - Actions
 
     func startScan() {
         guard !isProfilePresented else { return }
         isPresentingScan = true
     }
 
-    /// Demo destination is deliberately independent of RoomPlan success or support.
-    func finishDemoScan() {
+    func finishScan(_ scan: SavedScan?) {
+        isPresentingScan = false
+        guard let scan else {
+            scanLoadError = "No room was captured. Scan again on a LiDAR device, or open Room 1 in Profile → My rooms."
+            return
+        }
+        acceptScan(document: scan.document, files: scan.files)
+        sheetDetent = .collapsed
+    }
+
+    @MainActor
+    func prepareLibrary() async {
+        do {
+            try await Task.detached(priority: .userInitiated) { try RoomLibraryStore.ensureDemoRoom() }.value
+        } catch { scanLoadError = error.localizedDescription }
+    }
+
+    func openSavedRoom(_ entry: RoomLibraryEntry) {
         roomGeneration += 1
+        sceneID = UUID()
+        activeLayout = entry.layout
+        savedScan = entry.scan
+        activeRoomName = entry.name
         hasScannedSpace = true
         sheetDetent = .collapsed
-        isPresentingScan = false
+        isProfilePresented = false
     }
     func acceptScan(document: RoomDocument, files: ScanFiles) {
         roomGeneration += 1
+        sceneID = UUID()
+        activeLayout = nil
+        activeRoomName = "Scanned room"
         savedScan = SavedScan(document: document, files: files)
         hasScannedSpace = true
     }
@@ -83,6 +109,9 @@ final class HomeViewModel {
     func removeCurrentRoom() {
         roomGeneration += 1
         hasScannedSpace = false
+        sceneID = UUID()
+        activeLayout = nil
+        activeRoomName = nil
         savedScan = nil
         selectedProductID = nil
         isSimulating = false

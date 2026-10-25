@@ -4,38 +4,46 @@ import WebKit
 @MainActor
 final class RoomPreviewController: ObservableObject {
     private weak var webView: WKWebView?
-    private var ready = false
+    private var isReady = false
     private var moveEnabled = false
     private var initialLayout: RoomLayoutSnapshot?
+    private var scannedRoom: RoomDocument?
 
-    func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool) {
+    func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool, scannedRoom: RoomDocument? = nil) {
         webView = view
-        ready = false
+        isReady = false
         initialLayout = layout
+        self.scannedRoom = scannedRoom
         self.moveEnabled = moveEnabled
     }
 
     func detach(_ view: WKWebView) {
         guard webView === view else { return }
         webView = nil
-        ready = false
+        isReady = false
     }
 
     func didLoad(_ view: WKWebView) async throws {
         guard webView === view else { return }
         if let initialLayout {
+            try initialLayout.validate()
             let data = try JSONEncoder().encode(initialLayout)
             let json = String(decoding: data, as: UTF8.self)
             _ = try await view.evaluateJavaScript("window.tuckEditor.loadLayout(\(json))")
+        } else if let scannedRoom {
+            try scannedRoom.validateForPreview()
+            let json = String(decoding: try JSONEncoder().encode(scannedRoom), as: UTF8.self)
+            _ = try await view.evaluateJavaScript("window.tuckEditor.loadScannedRoom(\(json))")
         }
-        ready = true
+        guard webView === view else { return }
+        isReady = true
         try await applyMoveMode()
     }
 
     func setMoveEnabled(_ enabled: Bool) {
         guard moveEnabled != enabled else { return }
         moveEnabled = enabled
-        guard ready else { return }
+        guard isReady else { return }
         Task { try? await applyMoveMode() }
     }
 
@@ -45,7 +53,7 @@ final class RoomPreviewController: ObservableObject {
     }
 
     func snapshot() async throws -> RoomLayoutSnapshot {
-        guard ready, let webView else { throw RoomLibraryError.previewNotReady }
+        guard isReady, let webView else { throw RoomLibraryError.previewNotReady }
         let value = try await webView.evaluateJavaScript("JSON.stringify(window.tuckEditor.layout())")
         guard let json = value as? String, let data = json.data(using: .utf8) else {
             throw RoomLibraryError.invalidLayout

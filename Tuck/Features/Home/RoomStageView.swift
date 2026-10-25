@@ -9,13 +9,14 @@ struct RoomStageView: View {
     var previewController: RoomPreviewController? = nil
     var moveEnabled = false
     var initialLayout: RoomLayoutSnapshot? = nil
+    var scannedRoom: RoomDocument? = nil
     @StateObject private var fallbackController = RoomPreviewController()
 
     var body: some View {
         if hasScannedSpace {
             ZStack(alignment: .bottom) {
                 DemoRoomPreview(controller: previewController ?? fallbackController,
-                                initialLayout: initialLayout, moveEnabled: moveEnabled)
+                                initialLayout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
                     .accessibilityLabel(moveEnabled ? "Room. Drag furniture to move along one axis." : "Room. Drag to rotate. Pinch to zoom.")
                 if let onViewScan {
                     Button("View measurements", action: onViewScan)
@@ -45,19 +46,24 @@ private struct DemoRoomPreview: View {
     let controller: RoomPreviewController
     let initialLayout: RoomLayoutSnapshot?
     let moveEnabled: Bool
+    let scannedRoom: RoomDocument?
     @State private var failed = false
+    @State private var isLoading = true
 
     var body: some View {
         ZStack {
             if failed {
                 VStack(spacing: 4) {
-                    DemoRoomThumbnail()
+                    if scannedRoom == nil && initialLayout?.scannedRoom == nil { DemoRoomThumbnail() }
                     Text("3D preview unavailable on this device")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             } else {
                 DemoRoomWebView(controller: controller, initialLayout: initialLayout,
-                                moveEnabled: moveEnabled) { failed = true }
+                                moveEnabled: moveEnabled, scannedRoom: scannedRoom,
+                                onReady: { isLoading = false }, onFailure: { failed = true })
+                    .opacity(isLoading ? 0 : 1)
+                if isLoading { ProgressView("Loading room…") }
             }
         }
         .background(.white)
@@ -79,9 +85,11 @@ private struct DemoRoomWebView: UIViewRepresentable {
     let controller: RoomPreviewController
     let initialLayout: RoomLayoutSnapshot?
     let moveEnabled: Bool
+    let scannedRoom: RoomDocument?
+    let onReady: () -> Void
     let onFailure: () -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, onFailure: onFailure) }
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, onReady: onReady, onFailure: onFailure) }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -94,7 +102,7 @@ private struct DemoRoomWebView: UIViewRepresentable {
         view.scrollView.isScrollEnabled = false
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.allowsLinkPreview = false
-        controller.attach(view, layout: initialLayout, moveEnabled: moveEnabled)
+        controller.attach(view, layout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
         guard let url = Bundle.main.url(forResource: "DemoRoom", withExtension: "html") else {
             DispatchQueue.main.async(execute: onFailure)
             return view
@@ -116,14 +124,16 @@ private struct DemoRoomWebView: UIViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let controller: RoomPreviewController
+        let onReady: () -> Void
         let onFailure: () -> Void
-        init(controller: RoomPreviewController, onFailure: @escaping () -> Void) {
+        init(controller: RoomPreviewController, onReady: @escaping () -> Void, onFailure: @escaping () -> Void) {
             self.controller = controller
+            self.onReady = onReady
             self.onFailure = onFailure
         }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
-                do { try await controller.didLoad(webView) }
+                do { try await controller.didLoad(webView); onReady() }
                 catch { onFailure() }
             }
         }

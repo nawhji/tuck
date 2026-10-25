@@ -35,12 +35,16 @@ struct HomeView: View {
         .preferredColorScheme(.light)
         .environment(favorites)
         .sheet(isPresented: $model.isProfilePresented) {
-            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites)
+            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites, onOpenRoom: { entry in
+                moveEnabled = false
+                preview.setMoveEnabled(false)
+                model.openSavedRoom(entry)
+            })
         }
         .onChange(of: model.isProfilePresented) { _, presented in
             if presented { isInputFocused = false }
         }
-        .task { await model.restoreLatestScan() }
+        .task { await model.prepareLibrary() }
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
@@ -76,9 +80,8 @@ struct HomeView: View {
         .fullScreenCover(isPresented: $model.isPresentingScan) {
             DemoScanView(
                 onFinish: { scan in
-                    if let scan { model.acceptScan(document: scan.document, files: scan.files) }
                     moveEnabled = false
-                    model.finishDemoScan()
+                    model.finishScan(scan)
                 },
                 onCancel: { model.isPresentingScan = false }
             )
@@ -109,9 +112,13 @@ struct HomeView: View {
         return ZStack(alignment: .topLeading) {
             RoomStageView(hasScannedSpace: model.hasScannedSpace,
                           onScanTap: model.startScan,
+                          onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true },
                           viewportSize: viewport,
                           previewController: preview,
-                          moveEnabled: moveEnabled)
+                          moveEnabled: moveEnabled,
+                          initialLayout: model.activeLayout,
+                          scannedRoom: model.activeLayout == nil ? model.savedScan?.document : model.activeLayout?.scannedRoom)
+                .id(model.sceneID)
                 .frame(width: viewport.width, height: viewport.height)
                 .position(x: geometry.size.width / 2, y: top + viewport.height / 2)
             HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile)

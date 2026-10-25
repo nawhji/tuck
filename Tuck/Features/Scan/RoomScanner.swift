@@ -94,6 +94,7 @@ final class RoomScanner: ObservableObject {
         processingTimeout?.cancel()
         processingTimeout = nil
         releaseCapture()
+        isSaving = false
         phase = .idle
     }
 
