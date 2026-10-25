@@ -1,5 +1,6 @@
 import XCTest
 import SceneKit
+import UIKit
 @testable import Tuck
 
 final class FurnitureTests: XCTestCase {
@@ -42,6 +43,48 @@ final class FurnitureTests: XCTestCase {
         XCTAssertTrue(data.count.isMultiple(of: 36))
         XCTAssertEqual(Data(base64Encoded: part.normals)?.count, data.count)
         XCTAssertEqual(Data(base64Encoded: part.uvs)?.count, data.count / 3 * 2)
+    }
+
+    func testOriginalTintAndSurfaceMapsSurviveExport() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2), format: format).image { _ in
+            UIColor.brown.setFill(); UIRectFill(CGRect(x: 0, y: 0, width: 2, height: 2))
+        }
+        let material = SCNMaterial()
+        material.diffuse.contents = image
+        material.multiply.contents = UIColor(red: 0.5, green: 0.7, blue: 0.9, alpha: 1)
+        material.normal.contents = image; material.normal.intensity = 0.65
+        material.roughness.contents = image
+        let box = SCNBox(width: 0.6, height: 0.8, length: 0.7, chamferRadius: 0)
+        box.materials = [material]
+        let scene = SCNScene(); scene.rootNode.addChildNode(SCNNode(geometry: box))
+        let model = try FurnitureModelLibrary.export(scene: scene, id: "test", label: "Chair", target: [0.6, 0.8, 0.7])
+        let part = try XCTUnwrap(model.parts.first)
+        for (actual, expected) in zip(part.color, [Float(0.5), 0.7, 0.9]) {
+            XCTAssertEqual(actual, expected, accuracy: 0.001)
+        }
+        XCTAssertTrue(try XCTUnwrap(part.texture).hasPrefix("data:image/png;base64,"))
+        XCTAssertNotNil(part.normalTexture)
+        XCTAssertNotNil(part.roughnessTexture)
+        XCTAssertEqual(try XCTUnwrap(part.normalStrength), 0.65, accuracy: 0.001)
+        XCTAssertEqual(part.roughness, 1)
+        let bytes = try XCTUnwrap(Data(base64Encoded: String(try XCTUnwrap(part.texture).split(separator: ",", maxSplits: 1)[1])))
+        XCTAssertEqual(UIImage(data: bytes)?.size, CGSize(width: 2, height: 2))
+    }
+
+    func testCGColorAndConstantRoughnessSurviveExport() throws {
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1).cgColor
+        material.roughness.contents = NSNumber(value: 0.3)
+        let box = SCNBox(width: 1, height: 1, length: 1, chamferRadius: 0); box.materials = [material]
+        let scene = SCNScene(); scene.rootNode.addChildNode(SCNNode(geometry: box))
+        let model = try FurnitureModelLibrary.export(scene: scene, id: "test", label: "Chair", target: [1, 1, 1])
+        let part = try XCTUnwrap(model.parts.first)
+        for (actual, expected) in zip(part.color, [Float(0.2), 0.4, 0.6]) {
+            XCTAssertEqual(actual, expected, accuracy: 0.001)
+        }
+        XCTAssertEqual(part.roughness, 0.3, accuracy: 0.001)
+        XCTAssertNil(part.texture); XCTAssertNil(part.roughnessTexture)
     }
 
     /// Run this with Product > Test on the Mac before a live demo.

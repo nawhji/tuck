@@ -19,7 +19,7 @@ actor FurnitureModelLibrary {
         let size = (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("FurnitureModels-v2", isDirectory: true)
+            .appendingPathComponent("FurnitureModels-v3", isDirectory: true)
         let cache = directory.appendingPathComponent("\(id)-\(build)-\(size).json")
         if let data = try? Data(contentsOf: cache),
            (try? JSONDecoder().decode(ModelPayload.self, from: data)) != nil {
@@ -40,8 +40,20 @@ actor FurnitureModelLibrary {
             let dimensions = ["width_in", "height_in", "depth_in"].map {
                 (Double(row[$0] ?? "") ?? 32) * 0.0254
             }
-            return try JSONEncoder().encode(Self.export(scene: scene, id: id,
-                label: row["name"] ?? id, target: dimensions))
+            var model = try Self.export(scene: scene, id: id,
+                label: row["name"] ?? id, target: dimensions)
+            // Some USDZ imports expose unresolved image URLs. Model I/O can
+            // resolve the archive's textures while retaining its own geometry.
+            if !model.parts.contains(where: { $0.texture != nil }) {
+                let asset = MDLAsset(url: url)
+                asset.loadTextures()
+                if let textured = try? Self.export(scene: SCNScene(mdlAsset: asset), id: id,
+                    label: row["name"] ?? id, target: dimensions),
+                   textured.parts.contains(where: { $0.texture != nil }) {
+                    model = textured
+                }
+            }
+            return try JSONEncoder().encode(model)
         }
         memory[id] = data
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -63,6 +75,9 @@ actor FurnitureModelLibrary {
         let color: [Float]
         let roughness: Float
         let texture: String?
+        let normalTexture: String?
+        let normalStrength: Float?
+        let roughnessTexture: String?
     }
 
     /// Internal so the iOS test target can verify hierarchy, units and decoding
@@ -75,9 +90,19 @@ actor FurnitureModelLibrary {
             let color: [Float]
             let roughness: Float
             let texture: String?
+            let normalTexture: String?
+            let normalStrength: Float
+            let roughnessTexture: String?
         }
         var meshes: [Mesh] = []
         var textureCache: [ObjectIdentifier: String] = [:]
+        func map(_ property: SCNMaterialProperty) -> String? {
+            let key = ObjectIdentifier(property)
+            if let cached = textureCache[key] { return cached }
+            let image = textureData(property.contents)
+            if let image { textureCache[key] = image }
+            return image
+        }
         var low = SIMD3<Float>(repeating: .infinity), high = SIMD3<Float>(repeating: -.infinity)
         var failure: Error?
         scene.rootNode.enumerateHierarchy { node, _ in
@@ -97,16 +122,14 @@ actor FurnitureModelLibrary {
                     let indices = try triangles(element)
                     let material = geometry.materials.isEmpty ? SCNMaterial() : geometry.materials[index % geometry.materials.count]
                     let transformUV = SCNMatrix4ToMat4(material.diffuse.contentsTransform)
-                    let color = colorComponents(material.diffuse.contents)
-                    let key = ObjectIdentifier(material)
-                    let image: String?
-                    if let cached = textureCache[key] { image = cached }
-                    else {
-                        image = textureData(material.diffuse.contents)
-                        if let image { textureCache[key] = image }
-                    }
+                    let diffuse = colorComponents(material.diffuse.contents)
+                    let tint = colorComponents(material.multiply.contents)
+                    let color = zip(diffuse, tint).map { pair in pair.0 * pair.1 }
+                    let roughnessMap = map(material.roughness)
                     var mesh = Mesh(positions: [], normals: [], uvs: [], color: color,
-                        roughness: (material.roughness.contents as? NSNumber)?.floatValue ?? 0.72, texture: image)
+                        roughness: roughnessMap == nil ? scalar(material.roughness.contents, fallback: 0.72) : 1,
+                        texture: map(material.diffuse), normalTexture: map(material.normal),
+                        normalStrength: Float(material.normal.intensity), roughnessTexture: roughnessMap)
                     for face in stride(from: 0, to: indices.count, by: 3) {
                         let triple = Array(indices[face..<face + 3])
                         guard triple.allSatisfy({ $0 >= 0 && $0 < points.count }) else {
@@ -153,7 +176,9 @@ actor FurnitureModelLibrary {
             }
             return Part(positions: packed(positions), normals: packed(mesh.normals.flatMap { [$0.x, $0.y, $0.z] }),
                 uvs: packed(mesh.uvs.flatMap { [$0.x, $0.y] }), color: mesh.color,
-                roughness: min(1, max(0.05, mesh.roughness)), texture: mesh.texture)
+                roughness: min(1, max(0.05, mesh.roughness)), texture: mesh.texture,
+                normalTexture: mesh.normalTexture, normalStrength: mesh.normalStrength,
+                roughnessTexture: mesh.roughnessTexture)
         }
         let halfX = size.x * scale / 2, halfZ = size.z * scale / 2
         return ModelPayload(id: id, label: label, parts: parts,
@@ -222,15 +247,26 @@ actor FurnitureModelLibrary {
     }
 
     private static func colorComponents(_ contents: Any?) -> [Float] {
-        guard let color = contents as? UIColor else { return [1, 1, 1] }
+        let color: UIColor
+        if let value = contents as? UIColor { color = value }
+        else if let value = contents, CFGetTypeID(value as CFTypeRef) == CGColorGetTypeID() {
+            color = UIColor(cgColor: value as! CGColor)
+        } else { return [1, 1, 1] }
         var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
         color.getRed(&r, green: &g, blue: &b, alpha: &a)
         return [Float(r), Float(g), Float(b)]
     }
 
+    private static func scalar(_ contents: Any?, fallback: Float) -> Float {
+        if let number = contents as? NSNumber { return number.floatValue }
+        if contents is UIColor { return colorComponents(contents).reduce(0, +) / 3 }
+        return fallback
+    }
+
     private static func textureData(_ contents: Any?) -> String? {
         let image: UIImage?
         if let value = contents as? UIImage { image = value }
+        else if let value = contents as? Data { image = UIImage(data: value) }
         else if let value = contents as? URL, value.isFileURL { image = UIImage(contentsOfFile: value.path) }
         else if let value = contents as? String {
             image = UIImage(contentsOfFile: URL(string: value).flatMap { $0.isFileURL ? $0.path : nil } ?? value)
@@ -242,14 +278,16 @@ actor FurnitureModelLibrary {
         }
         else { image = nil }
         guard let image, image.size.width > 0, image.size.height > 0 else { return nil }
-        let ratio = min(1, 1024 / max(image.size.width, image.size.height))
-        let size = CGSize(width: max(1, floor(image.size.width * ratio)), height: max(1, floor(image.size.height * ratio)))
+        let pixels = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        let ratio = min(1, 2048 / max(pixels.width, pixels.height))
+        let size = CGSize(width: max(1, floor(pixels.width * ratio)), height: max(1, floor(pixels.height * ratio)))
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
             UIColor.white.setFill(); UIRectFill(CGRect(origin: .zero, size: size))
             image.draw(in: CGRect(origin: .zero, size: size))
         }
-        return resized.jpegData(compressionQuality: 0.82).map { "data:image/jpeg;base64," + $0.base64EncodedString() }
+        // Lossless color, normal and roughness maps retain leather/fabric detail.
+        return resized.pngData().map { "data:image/png;base64," + $0.base64EncodedString() }
     }
 
     private static func image(from texture: MDLTexture) -> UIImage? {

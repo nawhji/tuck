@@ -26,7 +26,6 @@ struct HomeView: View {
     @State private var scanAfterLeaving = false
     @State private var leaveAfterPickerDismiss = false
     @State private var deferredSaveError: String?
-    @State private var showsFurnitureSearch = false
 
     init(model: HomeViewModel? = nil) {
         _model = State(initialValue: model ?? HomeViewModel())
@@ -65,9 +64,6 @@ struct HomeView: View {
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
-        .sheet(isPresented: $showsFurnitureSearch) {
-            FurnitureSearchView(room: preview, onTry: tryFurniture).environment(favorites)
-        }
         .onReceive(preview.$moveEnabled) { enabled in
             if moveEnabled != enabled { moveEnabled = enabled }
         }
@@ -97,7 +93,7 @@ struct HomeView: View {
             Button("Cancel", role: .cancel) { cancelLeave() }
         } message: { Text("Give your room a name.") }
         .alert("Tuck", isPresented: Binding(
-            get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms && !showsRoomLibrary && !showsFurnitureSearch &&
+            get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms && !showsRoomLibrary &&
                 (saveError != nil || model.scanLoadError != nil || model.chatStorageError != nil || favorites.errorMessage != nil || preview.errorMessage != nil) },
             set: { if !$0 { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil; preview.errorMessage = nil } }
         )) {
@@ -183,18 +179,7 @@ struct HomeView: View {
                         .allowsHitTesting(false)
                 }
                 HStack(spacing: 10) {
-                    if model.hasScannedSpace {
-                        Button { isInputFocused = false; showsFurnitureSearch = true } label: {
-                            Label("Find a chair", systemImage: "magnifyingglass")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color("TuckBrown"))
-                                .padding(.horizontal, 12).padding(.vertical, 10)
-                                .background(.white, in: Capsule())
-                                .overlay(Capsule().stroke(Color("GrayScale100"), lineWidth: 1))
-                        }
-                        .disabled(isLoadingRooms || isSavingRoom)
-                        moveButton
-                    }
+                    if model.hasScannedSpace { moveButton }
                     cameraButton
                 }
             }
@@ -226,12 +211,15 @@ struct HomeView: View {
 
     private func tryFurniture(_ product: Product) {
         guard model.hasScannedSpace, !isLoadingRooms, !isSavingRoom else { return }
+        guard FurnitureCatalog.supports(product.id) else {
+            preview.errorMessage = "This chair’s 3D preview is coming soon."
+            return
+        }
         isInputFocused = false
         Task {
             do {
                 guard let added = try await preview.toggleProduct(product) else { return }
                 if added { model.selectedProductID = product.id }
-                showsFurnitureSearch = false
                 if added { moveEnabled = true }
                 withAnimation(.spring(duration: 0.35)) { model.sheetDetent = .minimized }
             } catch is CancellationError {}

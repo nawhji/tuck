@@ -9,8 +9,9 @@ const html = fs.readFileSync(path.join(root, 'Tuck/Resources/DemoRoom.html'), 'u
 const dataScript = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const editorScript = fs.readFileSync(path.join(root, 'Tuck/Resources/DemoFurniture.js'), 'utf8');
 
-function roomContext() {
-  const ids = new Map(), events = [], draws = [];
+function roomContext({normalMaps = true} = {}) {
+  const ids = new Map(), events = [], draws = [], materials = [], uniforms = new Map(), textures = new Map();
+  let activeTexture;
   let constant = 100, boundBuffer, nextID = 0;
   const constants = new Map(), pointers = new Map(), enabled = new Set();
   const gl = new Proxy({
@@ -21,6 +22,12 @@ function roomContext() {
     checkFramebufferStatus: () => gl.FRAMEBUFFER_COMPLETE,
     getAttribLocation: (_, name) => ({aPosition: 0, aNormal: 1, aUV: 2}[name]),
     getUniformLocation: (_, name) => name,
+    getExtension: name => name === 'OES_standard_derivatives' && normalMaps ? {} : null,
+    activeTexture: unit => { activeTexture = unit; },
+    bindTexture: (_, texture) => textures.set(activeTexture, texture),
+    uniform1i: (name, value) => uniforms.set(name, value),
+    uniform1f: (name, value) => uniforms.set(name, value),
+    uniform3fv: (name, value) => uniforms.set(name, Array.from(value)),
     enableVertexAttribArray: index => enabled.add(index),
     disableVertexAttribArray: index => enabled.delete(index),
     vertexAttribPointer: (index, size) => pointers.set(index, {size, buffer: boundBuffer}),
@@ -31,6 +38,9 @@ function roomContext() {
           `Attribute ${index} buffer is too small`);
       }
       draws.push(count);
+      if (enabled.has(2)) materials.push({color: uniforms.get('uColor'), normal: uniforms.get('uHasNormalMap'),
+        roughness: uniforms.get('uHasRoughnessMap'), normalTexture: textures.get(gl.TEXTURE2),
+        roughnessTexture: textures.get(gl.TEXTURE3)});
     },
   }, {get(target, key) {
     if (key in target) return target[key];
@@ -78,7 +88,8 @@ function roomContext() {
   context.window = context;
   vm.runInContext(dataScript, context, {filename: 'DemoRoom-data.js'});
   vm.runInContext(editorScript, context, {filename: 'DemoFurniture.js'});
-  return {context, api: context.tuckFurniture, editor: context.tuckEditor, events, ids, draws,
+  return {context, api: context.tuckFurniture, editor: context.tuckEditor, events, ids, draws, materials,
+    body: document.body,
     frame: () => context.nextFrame(),
     pointer: (name, id, x, y) => {
       for (const fn of ids.get('c').listeners[name] || []) fn({pointerId: id, clientX: x, clientY: y});
@@ -96,7 +107,9 @@ function fixture(id) {
   const pack = values => Buffer.from(new Float32Array(values).buffer).toString('base64');
   return {id, label: `Actual product ${id}`, bounds: [[-.3,0,-.35],[.3,.8,.35]],
     parts: [{positions: pack(positions), normals: pack(normals), uvs: pack(Array(72).fill(0)),
-      color: [.5,.3,.15], roughness: .7, texture: 'data:image/png;base64,fixture'}]};
+      color: [.5,.3,.15], roughness: .7, texture: 'data:image/png;base64,fixture',
+      normalTexture: 'data:image/png;base64,normal', normalStrength: .6,
+      roughnessTexture: 'data:image/png;base64,roughness'}]};
 }
 
 const clean = value => JSON.parse(JSON.stringify(value));
@@ -106,6 +119,10 @@ const clean = value => JSON.parse(JSON.stringify(value));
   assert(api.layout().items.every(item => item.label));
   assert.equal(a.events[0].type, 'ready');
   assert(a.draws.length > 0);
+  assert.equal(a.ids.get('furnitureTools').children.length, 1);
+  assert.equal(a.ids.get('furnitureTools').children[0].textContent, 'Names on');
+  const descendants = node => [node, ...node.children.flatMap(descendants)];
+  assert(!descendants(a.body).some(node => node.tagName === 'select'), 'No furniture selection dropdown in the room');
   await assert.rejects(() => api.register(fixture('invented')), /Unknown chair/);
   const ids = ['sofa_007_brown', 'sofa_027_brown', 'sofa_028_brown'];
   for (const id of ids) await api.register(fixture(id));
@@ -114,6 +131,16 @@ const clean = value => JSON.parse(JSON.stringify(value));
   assert.equal(api.layout().items.length, 10, 'repeated Try must be idempotent');
   assert.equal(new Set(api.layout().items.filter(i => i.productID).map(i => i.productID)).size, 3);
   a.frame(); // checks texture UV and shadow-pass buffer lengths
+  assert(a.materials.length >= 3);
+  for (const material of a.materials) {
+    assert.deepEqual(material.color, [.5,.3,.15], 'Selection must not recolor an original chair');
+    assert.equal(material.normal, 1); assert.equal(material.roughness, 1);
+    assert(material.normalTexture && material.roughnessTexture);
+  }
+  const fallback = roomContext({normalMaps: false});
+  await fallback.api.register(fixture(ids[0])); fallback.api.tryProduct(ids[0]); fallback.frame();
+  assert(fallback.materials.length > 0);
+  assert(fallback.materials.every(material => material.normal === 0 && material.roughness === 1));
   const product = api.layout().items.find(i => i.productID === ids[0]);
   editor.setTransform(product.instanceId, [0,0,.15], .3);
   api.select(product.instanceId); api.rename('My reading chair'); api.rotate(15);

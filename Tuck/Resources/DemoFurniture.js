@@ -1,18 +1,34 @@
 const detachedControls=new Map();const $=id=>{let e=document.getElementById(id);if(e)return e;if(!detachedControls.has(id)){e=document.createElement(['asset','selected'].includes(id)?'select':'input');detachedControls.set(id,e)}return detachedControls.get(id)},canvas=$('c'),gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 if(!gl){$('status').textContent='Open in a browser that supports WebGL.';throw Error('WebGL unavailable')}
 const vs=`attribute vec3 aPosition;attribute vec3 aNormal;attribute vec2 aUV;varying vec2 vUV;uniform mat4 uMVP;uniform mat4 uModel;uniform mat4 uLight;varying vec3 vNormal;varying vec3 vWorld;varying vec4 vShadow;void main(){vUV=aUV;vec4 w=uModel*vec4(aPosition,1.);vWorld=w.xyz;vNormal=mat3(uModel)*aNormal;vShadow=uLight*w;gl_Position=uMVP*w;}`;
-const fs=`precision highp float;
+const normalMapsSupported=!!gl.getExtension('OES_standard_derivatives');
+const fs=`${normalMapsSupported?'#extension GL_OES_standard_derivatives : enable\n#define TUCK_NORMAL_MAPS 1\n':''}precision highp float;
 varying vec2 vUV;uniform sampler2D uMap;uniform bool uHasMap;uniform vec3 uColor;uniform vec3 uEye;uniform float uKind;uniform float uRoughness;uniform sampler2D uShadow;
 varying vec3 vNormal;varying vec3 vWorld;varying vec4 vShadow;
+uniform sampler2D uNormalMap;uniform bool uHasNormalMap;uniform float uNormalStrength;
+uniform sampler2D uRoughnessMap;uniform bool uHasRoughnessMap;
+#ifdef TUCK_NORMAL_MAPS
+vec3 mappedNormal(vec3 n){
+ vec3 q1=dFdx(vWorld),q2=dFdy(vWorld);vec2 t1=dFdx(vUV),t2=dFdy(vUV);
+ vec3 p2=cross(q2,n),p1=cross(n,q1),t=p2*t1.x+p1*t2.x,b=p2*t1.y+p1*t2.y;
+ float scale=max(dot(t,t),dot(b,b));if(scale<.000000000001)return n;
+ vec3 detail=texture2D(uNormalMap,vUV).xyz*2.-1.;detail.xy*=uNormalStrength;
+ return normalize(mat3(t*inversesqrt(scale),b*inversesqrt(scale),n)*detail);
+}
+#endif
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
 float unpackDepth(vec3 c){return dot(c,vec3(1.,1./255.,1./65025.));}
 float visibility(vec3 normal){vec3 q=vShadow.xyz/vShadow.w*.5+.5;if(q.x<0.||q.x>1.||q.y<0.||q.y>1.||q.z<0.||q.z>1.)return 1.;float bias=max(.0007,.002*(1.-max(dot(normal,normalize(vec3(-3.,6.,4.))),0.)));float shade=0.;for(int x=-2;x<=2;x++)for(int y=-2;y<=2;y++){vec2 off=vec2(float(x),float(y))*(1.5/2048.);float d=unpackDepth(texture2D(uShadow,q.xy+off).rgb);shade+=q.z-bias<=d?1.:0.;}return shade/25.;}
-void main(){if(uKind>4.5){float light=.65+.35*max(dot(normalize(vNormal),normalize(vec3(-.4,.85,.35))),0.);gl_FragColor=vec4(uColor*light,1.);return;}vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;vec3 base=uColor;if(uHasMap)base*=texture2D(uMap,vUV).rgb;vec2 uv=abs(n.y)>.6?vWorld.xz:(abs(n.x)>.6?vWorld.zy:vWorld.xy);
+void main(){if(uKind>4.5){float light=.65+.35*max(dot(normalize(vNormal),normalize(vec3(-.4,.85,.35))),0.);gl_FragColor=vec4(uColor*light,1.);return;}vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;
+#ifdef TUCK_NORMAL_MAPS
+if(uHasNormalMap)n=mappedNormal(n);
+#endif
+vec3 base=uColor;if(uHasMap)base*=texture2D(uMap,vUV).rgb;vec2 uv=abs(n.y)>.6?vWorld.xz:(abs(n.x)>.6?vWorld.zy:vWorld.xy);
 if(uKind>.5&&uKind<1.5){float grain=noise(vec2(uv.x*5.+sin(uv.y*2.)*.35,uv.y*120.));float fine=noise(uv*vec2(20.,600.));base*=.94+.065*grain+.035*fine;}
 if(uKind>1.5&&uKind<2.5){float weave=sin(uv.x*800.)*sin(uv.y*800.);base*=.975+.018*weave+.025*noise(uv*90.);}
 vec3 l=normalize(vec3(-3.,6.,4.)),v=normalize(uEye-vWorld),h=normalize(l+v);float diff=max(dot(n,l),0.),shadow=visibility(n);float hemi=mix(.63,.94,n.y*.5+.5);vec3 light=vec3(1.02,1.0,.95)*hemi+vec3(1.0,.97,.89)*diff*.63*shadow;
-float rough=uRoughness;float spec=pow(max(dot(n,h),0.),mix(110.,8.,rough))*(1.-rough)*.35*shadow;
+float rough=clamp(uRoughness*(uHasRoughnessMap?texture2D(uRoughnessMap,vUV).r:1.),.05,1.);float spec=pow(max(dot(n,h),0.),mix(110.,8.,rough))*(1.-rough)*.35*shadow;
 vec3 col=pow(base,vec3(2.2))*light+spec;
 if(uKind>2.5&&uKind<3.5)col+=vec3(.10,.12,.13)*pow(1.-max(dot(n,v),0.),3.);
 if(uKind>3.5){vec3 reflected=reflect(-v,n);vec3 env=mix(vec3(.46,.42,.35),vec3(.83,.91,.95),smoothstep(-.35,.4,reflected.y));col=mix(col,env*.75,.38)+spec;}
@@ -22,6 +38,7 @@ col=vec3(1.)-exp(-col*1.35);gl_FragColor=vec4(pow(col,vec3(1./2.2)),1.);
 function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
 const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));gl.useProgram(program);
 const ap=gl.getAttribLocation(program,'aPosition'),an=gl.getAttribLocation(program,'aNormal'),at=gl.getAttribLocation(program,'aUV'),ut=gl.getUniformLocation(program,'uMap'),uh=gl.getUniformLocation(program,'uHasMap'),um=gl.getUniformLocation(program,'uMVP'),ud=gl.getUniformLocation(program,'uModel'),uc=gl.getUniformLocation(program,'uColor');
+const un=gl.getUniformLocation(program,'uNormalMap'),uhn=gl.getUniformLocation(program,'uHasNormalMap'),uns=gl.getUniformLocation(program,'uNormalStrength'),urt=gl.getUniformLocation(program,'uRoughnessMap'),uhr=gl.getUniformLocation(program,'uHasRoughnessMap');
 function sub(a,b){return a.map((v,i)=>v-b[i])}function dot(a,b){return a.reduce((s,v,i)=>s+v*b[i],0)}function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}function norm(a){let l=Math.hypot(...a);return a.map(v=>v/l)}
 function buffer(arr){let b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.STATIC_DRAW);return b}
 function floats(base64){const raw=atob(base64),bytes=new Uint8Array(raw.length);for(let k=0;k<raw.length;k++)bytes[k]=raw.charCodeAt(k);if(bytes.byteLength%4)throw Error('Invalid geometry buffer');return new Float32Array(bytes.buffer)}
@@ -139,7 +156,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();radius=Math.max(3.4,Math.
 $('reverse').onclick=()=>{yaw=.78;pitch=.65;dirty=true};$('top').onclick=()=>{pitch=1.35;dirty=true};
 $('walls').onclick=e=>{autoWalls=!autoWalls;e.target.classList.toggle('active',autoWalls);dirty=true};$('roof').onclick=e=>{showRoof=!showRoof;e.target.classList.toggle('active',showRoof);dirty=true};$('reset').onclick=()=>{yaw=-.72;pitch=.62;radius=7.5;dirty=true};
 function resize(){let d=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(canvas.clientWidth*d);canvas.height=Math.round(canvas.clientHeight*d);gl.viewport(0,0,canvas.width,canvas.height);dirty=true}addEventListener('resize',resize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(canvas);resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(1,1,1,1);
-function draw(objects,m,eye,highlight=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uh,p.map?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness??.8);gl.uniform3fv(uc,highlight?p.color.map(v=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
+function draw(objects,m,eye,highlight=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uh,p.map?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1i(uhn,normalMapsSupported&&p.normalMap?1:0);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,p.normalMap||shadowTexture);gl.uniform1i(un,2);gl.uniform1f(uns,p.normalStrength??1);gl.uniform1i(uhr,p.roughnessMap?1:0);gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,p.roughnessMap||shadowTexture);gl.uniform1i(urt,3);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness??.8);gl.uniform3fv(uc,highlight&&!p.preserveAppearance?p.color.map(v=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
 // A real directional shadow pass, shared by the room and every movable instance.
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
 let lightMatrix=mul(ortho(-4.8,4.8,-4.8,4.8,.1,22),look([-4.5,9,6],[0,.5,0]));
@@ -277,8 +294,7 @@ const style=document.createElement('style');style.textContent=`
 #axisIndicator{bottom:51px}#rotationHUD{display:none!important}
 `;document.head.append(style);
 const tools=document.createElement('div');tools.id='furnitureTools';
-const picker=document.createElement('select');picker.setAttribute('aria-label','Select furniture');picker.onchange=()=>selectFurniture(picker.value||null);
-const nameToggle=document.createElement('button');nameToggle.textContent='Names on';nameToggle.onclick=()=>{showNames=!showNames;nameToggle.textContent=showNames?'Names on':'Names off';dirty=true};tools.append(picker,nameToggle);document.body.append(tools);
+const nameToggle=document.createElement('button');nameToggle.textContent='Names on';nameToggle.onclick=()=>{showNames=!showNames;nameToggle.textContent=showNames?'Names on':'Names off';dirty=true};tools.append(nameToggle);document.body.append(tools);
 const toolbar=document.createElement('div');toolbar.id='selectedFurniture';toolbar.hidden=true;
 const nameInput=document.createElement('input');nameInput.maxLength=80;nameInput.setAttribute('aria-label','Furniture name');nameInput.placeholder='Furniture name';nameInput.onchange=()=>renameSelected(nameInput.value);nameInput.onkeydown=e=>{if(e.key==='Enter')nameInput.blur()};
 const turnLeft=document.createElement('button');turnLeft.textContent='↶';turnLeft.setAttribute('aria-label','Rotate furniture left');turnLeft.onclick=()=>{rotate(-15);commitLayout()};
@@ -287,8 +303,6 @@ const removeButton=document.createElement('button');removeButton.textContent='Re
 const labels=document.createElement('div');labels.id='furnitureLabels';document.body.append(labels);
 function itemName(i){const raw=scannedSource?.objects.find(e=>'scan-'+e.id===i.assetId);return i.label||raw?.label||assetMap.get(i.assetId)?.label||'Furniture'}
 function updateFurnitureUI(){
- const active=document.activeElement===picker;picker.replaceChildren(new Option('Select furniture…',''));
- for(const item of items)picker.add(new Option(itemName(item),item.instanceId));picker.value=selected||'';
  const i=chosen();toolbar.hidden=!i;if(i&&document.activeElement!==nameInput)nameInput.value=itemName(i);
  const live=new Set(items.map(i=>i.instanceId));for(const[id,node]of labelNodes)if(!live.has(id)){node.remove();labelNodes.delete(id)}
  for(const item of items){let node=labelNodes.get(item.instanceId);if(!node){node=document.createElement('button');node.className='furnitureLabel';node.onclick=()=>selectFurniture(item.instanceId);labels.append(node);labelNodes.set(item.instanceId,node)}node.textContent=itemName(item);node.classList.toggle('selected',item.instanceId===selected)}
@@ -305,7 +319,7 @@ async function texture(url){
 }
 async function register(payload){
  const allowed=['sofa_007_brown','sofa_027_brown','sofa_028_brown'];if(!payload||!allowed.includes(payload.id)||!Array.isArray(payload.parts)||!payload.parts.length)throw Error('Unknown chair model');if(assetMap.has(payload.id))return true;
- const objects=[];try{for(const part of payload.parts){const object=upload(part);objects.push(object);object.map=await texture(part.texture)}}catch(error){for(const o of objects){gl.deleteBuffer(o.v);gl.deleteBuffer(o.n);if(o.uv)gl.deleteBuffer(o.uv)}throw error}
+ const objects=[];try{for(const part of payload.parts){const object=upload(part);objects.push(object);object.preserveAppearance=true;object.map=await texture(part.texture);object.normalMap=await texture(part.normalTexture);object.roughnessMap=await texture(part.roughnessTexture)}}catch(error){for(const o of objects){gl.deleteBuffer(o.v);gl.deleteBuffer(o.n);if(o.uv)gl.deleteBuffer(o.uv)}throw error}
  assetMap.set(payload.id,{id:payload.id,productID:payload.id,label:payload.label,parts:objects,objects,defaultTransform:{position:[0,0,0],yawRadians:0},bounds:payload.bounds,optional:true});dirty=true;return true
 }
 function footprint(assetId,position,yawRadians=0){const asset=assetMap.get(assetId),b=localBounds(asset),i={position,yawRadians},corners=[];for(const x of[b[0][0],b[1][0]])for(const z of[b[0][2],b[1][2]])corners.push(world([x,0,z],i));return{low:[Math.min(...corners.map(v=>v[0])),Math.min(...corners.map(v=>v[2]))],high:[Math.max(...corners.map(v=>v[0])),Math.max(...corners.map(v=>v[2]))]}}
