@@ -642,3 +642,98 @@ extension RoomChatPersistenceTests {
         }
     }
 }
+
+final class SaveBeforeScanTests: XCTestCase {
+    private func layout(x: Double) -> RoomLayoutSnapshot {
+        .init(version: 1, units: "meters", upAxis: "Y", items: [
+            .init(instanceId: "chair", assetId: "chair", position: [x,0,0], yawRadians: 0.4)
+        ])
+    }
+    @MainActor
+    func testSaveBeforeScanKeepsSceneAndChatButUpdatesSavedPlacement() {
+        let model = HomeViewModel(historyDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let original = RoomLibraryEntry(id: "sample", name: "Sample Room", updatedAt: Date(), layout: layout(x: 0), scan: nil)
+        model.openSavedRoom(original)
+        model.messages = [.sampleUser]
+        model.draft = "Keep this draft"
+        let sceneID = model.sceneID
+        let saved = RoomLibraryEntry(id: original.id, name: original.name, updatedAt: Date(), layout: layout(x: 1), scan: nil)
+        model.recordSavedRoom(saved)
+        XCTAssertEqual(model.sceneID, sceneID)
+        XCTAssertEqual(model.activeLayout, saved.layout)
+        XCTAssertEqual(model.messages.count, 1)
+        XCTAssertEqual(model.draft, "Keep this draft")
+        XCTAssertEqual(model.activeRoomID, saved.id)
+        model.startScan()
+        XCTAssertTrue(model.isPresentingScan)
+        model.isPresentingScan = false
+        XCTAssertEqual(model.activeLayout, saved.layout)
+        XCTAssertEqual(model.roomDisplayName, "Sample Room")
+    }
+    @MainActor
+    func testSaveAsNewBeforeScanUsesNextNameForTheCapturedRoom() {
+        let model = HomeViewModel(historyDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let saved = RoomLibraryEntry(id: "new", name: "New Room 1", updatedAt: Date(), layout: layout(x: 1), scan: nil)
+        model.updateRoomNames([saved])
+        model.recordSavedRoom(saved)
+        XCTAssertEqual(model.activeRoomID, "new")
+        XCTAssertEqual(model.roomDisplayName, "New Room 1")
+        let dir = URL(fileURLWithPath: "/unused")
+        let files = ScanFiles(directory: dir, json: dir, nativeJSON: dir, model: nil, modelWarning: nil)
+        model.startScan()
+        model.finishScan(SavedScan(document: .sample, files: files))
+        XCTAssertEqual(model.roomDisplayName, "New Room 2")
+        XCTAssertNil(model.activeRoomID)
+        XCTAssertFalse(model.isPresentingScan)
+    }
+    @MainActor
+    func testCancellingUnmodifiedScanKeepsPreviousRoom() {
+        let model = HomeViewModel(historyDirectory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let saved = RoomLibraryEntry(id: "sample", name: "Sample Room", updatedAt: Date(), layout: layout(x: 0), scan: nil)
+        model.openSavedRoom(saved)
+        let sceneID = model.sceneID
+        XCTAssertFalse(model.needsSaveBeforeSwitch(layoutChanged: false))
+        model.startScan()
+        model.isPresentingScan = false
+        XCTAssertEqual(model.sceneID, sceneID)
+        XCTAssertEqual(model.activeRoomID, "sample")
+        XCTAssertEqual(model.activeLayout, saved.layout)
+        XCTAssertTrue(model.hasScannedSpace)
+    }
+}
+
+extension SaveBeforeScanTests {
+    @MainActor
+    func testChatAfterSaveBeforeScanRestoresUnderSavedRoomID() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = HomeViewModel(historyDirectory: folder)
+        let saved = RoomLibraryEntry(id: "newly-saved", name: "New Room 1", updatedAt: Date(), layout: layout(x: 1), scan: nil)
+        model.messages = [.init(role: .user, text: "Before saving")]
+        model.recordSavedRoom(saved)
+        model.startScan()
+        model.isPresentingScan = false // cancelling the new scan leaves this saved room active
+        model.messages.append(.init(role: .user, text: "After cancelling scan"))
+        model.persistChat()
+        let restarted = HomeViewModel(historyDirectory: folder)
+        restarted.openSavedRoom(saved)
+        XCTAssertEqual(restarted.messages.map(\.rawText), ["Before saving", "After cancelling scan"])
+    }
+
+    @MainActor
+    func testResavingChatKeepsLatestTextForExistingMessageID() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let model = HomeViewModel(historyDirectory: folder)
+        let saved = RoomLibraryEntry(id: "saved", name: "Room", updatedAt: Date(), layout: layout(x: 1), scan: nil)
+        let replyID = UUID()
+        model.messages = [.init(id: replyID, role: .assistant, text: "Partial")]
+        model.recordSavedRoom(saved)
+        model.messages[0].rawText = "Complete reply"
+        model.recordSavedRoom(saved)
+        let restarted = HomeViewModel(historyDirectory: folder)
+        restarted.openSavedRoom(saved)
+        XCTAssertEqual(restarted.messages.count, 1)
+        XCTAssertEqual(restarted.messages[0].rawText, "Complete reply")
+    }
+}

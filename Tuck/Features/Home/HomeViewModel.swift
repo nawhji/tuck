@@ -104,8 +104,11 @@ final class HomeViewModel {
         let key = "saved:" + id
         do {
             var combined = try historyStore.load(key)
-            var ids = Set(combined.map(\.id))
-            combined += messages.filter { !$0.rawText.isEmpty && ids.insert($0.id).inserted }
+            var indices = Dictionary(uniqueKeysWithValues: combined.enumerated().map { ($0.element.id, $0.offset) })
+            for message in messages where !message.rawText.isEmpty {
+                if let index = indices[message.id] { combined[index] = message }
+                else { indices[message.id] = combined.count; combined.append(message) }
+            }
             try historyStore.save(combined, key: key)
             conversations[key] = combined
         } catch { chatStorageError = "Room saved, but its chat couldn't be saved: " + error.localizedDescription }
@@ -201,6 +204,19 @@ final class HomeViewModel {
         sheetDetent = .collapsed
         isProfilePresented = false
     }
+    /// Keep the rendered scene and current conversation when saving before a new scan.
+    /// If that scan is cancelled, subsequent messages belong to the saved room ID.
+    func recordSavedRoom(_ entry: RoomLibraryEntry) {
+        persistChat(forSavedRoomID: entry.id)
+        conversationKey = "saved:" + entry.id
+        messages = conversations[conversationKey] ?? messages
+        rebuildCards()
+        activeRoomID = entry.id
+        activeRoomName = entry.name
+        activeLayout = entry.layout
+        savedScan = entry.scan
+    }
+
     func acceptScan(document: RoomDocument, files: ScanFiles) {
         activateConversation("scan:" + document.id)
         roomGeneration += 1

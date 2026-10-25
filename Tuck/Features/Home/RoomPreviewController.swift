@@ -61,6 +61,18 @@ final class RoomPreviewController: ObservableObject {
         return try await snapshot().hasPlacementChanges(comparedTo: initialSnapshot)
     }
 
+    func acceptSavedSnapshot(_ snapshot: RoomLayoutSnapshot) {
+        initialSnapshot = snapshot
+    }
+
+    func discardChanges() async throws {
+        guard isReady, let webView, let initialSnapshot else { throw RoomLibraryError.previewNotReady }
+        let json = String(decoding: try JSONEncoder().encode(initialSnapshot), as: UTF8.self)
+        _ = try await webView.evaluateJavaScript("window.tuckEditor.loadLayout(\(json))")
+        moveEnabled = false
+        try await applyMoveMode()
+    }
+
     func chatContext(roomID: String, roomName: String) async throws -> RoomChatContext {
         guard isReady, let view = webView else { throw RoomLibraryError.previewNotReady }
         let value = try await view.evaluateJavaScript("JSON.stringify(window.tuckEditor.chatContext())")

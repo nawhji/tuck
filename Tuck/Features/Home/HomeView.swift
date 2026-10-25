@@ -22,6 +22,7 @@ struct HomeView: View {
     @State private var showsRoomLibrary = false
     @State private var queuedRoomSelection: RoomLibraryEntry?
     @State private var roomAfterLeaving: RoomLibraryEntry?
+    @State private var scanAfterLeaving = false
     @State private var leaveAfterPickerDismiss = false
     @State private var deferredSaveError: String?
 
@@ -57,7 +58,7 @@ struct HomeView: View {
         .sheet(isPresented: $showExistingRooms, onDismiss: existingRoomPickerDismissed) {
             existingRoomPicker.interactiveDismissDisabled(isSavingRoom)
         }
-        .confirmationDialog(roomAfterLeaving == nil ? "Save this room?" : "Save changes?", isPresented: $showLeaveDialog, titleVisibility: .visible) {
+        .confirmationDialog(roomAfterLeaving == nil && !scanAfterLeaving ? "Save this room?" : "Save changes?", isPresented: $showLeaveDialog, titleVisibility: .visible) {
             if !existingRooms.isEmpty {
                 Button("Save to existing room") { showExistingRooms = true }
             }
@@ -65,10 +66,11 @@ struct HomeView: View {
                 roomName = model.suggestedSaveName
                 showNewRoomName = true
             }
-            Button(roomAfterLeaving == nil ? "Delete current room" : "Discard changes", role: .destructive) { leaveRoom() }
-            Button("Cancel", role: .cancel) { roomAfterLeaving = nil }
+            Button(roomAfterLeaving == nil && !scanAfterLeaving ? "Delete current room" : "Discard changes", role: .destructive) { discardAndContinue() }
+            Button("Cancel", role: .cancel) { cancelLeave() }
         } message: {
-            Text(roomAfterLeaving == nil
+            Text(scanAfterLeaving ? "Save your changes before starting a new scan."
+                 : roomAfterLeaving == nil
                  ? "Save your layout before leaving. Deleting the current room keeps previously saved rooms."
                  : "Save your changes before opening another room.")
         }
@@ -76,7 +78,7 @@ struct HomeView: View {
             TextField("Room name", text: $roomName)
             Button("Save") { saveRoom(existingID: nil) }
                 .disabled(roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || roomName.count > 60)
-            Button("Cancel", role: .cancel) { roomAfterLeaving = nil }
+            Button("Cancel", role: .cancel) { cancelLeave() }
         } message: { Text("Give your room a name.") }
         .alert("Tuck", isPresented: Binding(
             get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms && !showsRoomLibrary &&
@@ -122,7 +124,7 @@ struct HomeView: View {
         let viewport = CGSize(width: geometry.size.width, height: max(160, bottom - top))
         return ZStack(alignment: .topLeading) {
             RoomStageView(hasScannedSpace: model.hasScannedSpace,
-                          onScanTap: model.startScan,
+                          onScanTap: requestScan,
                           onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true },
                           viewportSize: viewport,
                           previewController: preview,
@@ -188,7 +190,7 @@ struct HomeView: View {
     }
 
     private var cameraButton: some View {
-        Button(action: model.startScan) {
+        Button(action: requestScan) {
             Image(systemName: "camera")
                 .font(.system(size: 20)).foregroundStyle(.white)
                 .frame(width: 42, height: 42)
@@ -268,6 +270,45 @@ struct HomeView: View {
         }
     }
 
+    private func requestScan() {
+        guard !isLoadingRooms, !isSavingRoom, !model.isPresentingScan, !model.isProfilePresented else { return }
+        isInputFocused = false
+        isLoadingRooms = true
+        Task {
+            defer { isLoadingRooms = false }
+            do {
+                let changed = model.hasScannedSpace ? try await preview.hasUnsavedChanges() : false
+                if model.needsSaveBeforeSwitch(layoutChanged: changed) {
+                    try await loadSaveChoices(opening: nil, forScan: true)
+                } else { beginScan() }
+            } catch { cancelLeave(); saveError = error.localizedDescription }
+        }
+    }
+
+    private func beginScan() {
+        cancelLeave()
+        resetEditorInteraction()
+        model.startScan()
+    }
+
+    private func cancelLeave() {
+        roomAfterLeaving = nil
+        scanAfterLeaving = false
+    }
+
+    private func discardAndContinue() {
+        guard scanAfterLeaving else { leaveRoom(); return }
+        isLoadingRooms = true
+        Task {
+            defer { isLoadingRooms = false }
+            do {
+                // If the new scan is cancelled, return to the unedited previous room.
+                try await preview.discardChanges()
+                beginScan()
+            } catch { cancelLeave(); saveError = error.localizedDescription }
+        }
+    }
+
     private func openRoomLibrary() {
         guard !isSavingRoom, !isLoadingRooms, !model.isPresentingScan else { return }
         isInputFocused = false
@@ -302,10 +343,11 @@ struct HomeView: View {
         }
     }
 
-    private func loadSaveChoices(opening entry: RoomLibraryEntry?) async throws {
+    private func loadSaveChoices(opening entry: RoomLibraryEntry?, forScan: Bool = false) async throws {
         existingRooms = try await Task.detached(priority: .userInitiated) { try RoomLibraryStore.all() }.value
         model.updateRoomNames(existingRooms)
         roomAfterLeaving = entry
+        scanAfterLeaving = forScan
         showLeaveDialog = true
     }
 
@@ -313,7 +355,7 @@ struct HomeView: View {
         if leaveAfterPickerDismiss {
             leaveAfterPickerDismiss = false
             leaveRoom()
-        } else { roomAfterLeaving = nil }
+        } else { cancelLeave() }
         if let deferredSaveError {
             saveError = deferredSaveError
             self.deferredSaveError = nil
@@ -347,16 +389,23 @@ struct HomeView: View {
             do {
                 let layout = try await preview.snapshot()
                 let name = roomName
-                let (savedID, entries) = try await Task.detached(priority: .userInitiated) {
+                let result = try await Task.detached(priority: .userInitiated) {
                     let savedID: String
                     if let existingID {
                         try RoomLibraryStore.saveExisting(id: existingID, layout: layout)
                         savedID = existingID
                     } else { savedID = try RoomLibraryStore.saveNew(name: name, layout: layout) }
-                    return (savedID, try RoomLibraryStore.all())
+                    return (entries: try RoomLibraryStore.all(), savedID: savedID)
                 }.value
-                model.persistChat(forSavedRoomID: savedID)
+                let entries = result.entries
                 model.updateRoomNames(entries)
+                if scanAfterLeaving {
+                    guard let saved = entries.first(where: { $0.id == result.savedID }) else { throw RoomLibraryError.roomNotFound }
+                    model.recordSavedRoom(saved)
+                    preview.acceptSavedSnapshot(layout)
+                } else {
+                    model.persistChat(forSavedRoomID: result.savedID)
+                }
                 // An overwrite can change the selected destination. Open its fresh saved version.
                 if let destination = roomAfterLeaving {
                     let sourceID = destination.scan?.id ?? destination.layout?.scannedRoom?.id
@@ -373,18 +422,23 @@ struct HomeView: View {
                 if showExistingRooms {
                     deferredSaveError = error.localizedDescription
                     showExistingRooms = false
-                } else { saveError = error.localizedDescription }
+                } else { cancelLeave(); saveError = error.localizedDescription }
             }
         }
     }
 
-    private func leaveRoom() {
+    private func resetEditorInteraction() {
         noticeTask?.cancel()
         moveNotice = nil
         moveEnabled = false
         preview.setMoveEnabled(false)
+    }
+
+    private func leaveRoom() {
+        if scanAfterLeaving { beginScan(); return }
+        resetEditorInteraction()
         let destination = roomAfterLeaving
-        roomAfterLeaving = nil
+        cancelLeave()
         if let destination { model.openSavedRoom(destination) }
         else { model.removeCurrentRoom() }
     }
