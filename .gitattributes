@@ -1,0 +1,3 @@
+# Generated JSON payloads contain large base64 arrays; review their generator,
+# manifest and source-validation tests rather than one enormous text diff.
+Tuck/Resources/ChairMaterials/*.tuckmodel binary

@@ -4,60 +4,26 @@ import ModelIO
 import UIKit
 import simd
 
-/// Reads the actual bundled USDZ once, off the main actor, and caches a small
-/// textured triangle payload for the existing offline WebGL room.
+/// Loads verified, offline material payloads for the three supplied demo chairs.
+/// Their original USDZ files remain available for Quick Look. The prepared path
+/// avoids SceneKit/Model I/O texture reinterpretation and all old disk caches.
 actor FurnitureModelLibrary {
     static let shared = FurnitureModelLibrary()
-    private var memory: [String: Data] = [:]
 
     func payload(for id: String) throws -> Data {
         guard FurnitureCatalog.supports(id),
-              let url = Bundle.main.url(forResource: id, withExtension: "usdz") else {
+              let url = Bundle.main.url(forResource: id, withExtension: "tuckmodel",
+                                        subdirectory: "ChairMaterials") else {
             throw FurnitureError.missingModel(id)
         }
-        if let cached = memory[id] { return cached }
-        let size = (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("FurnitureModels-v3", isDirectory: true)
-        let cache = directory.appendingPathComponent("\(id)-\(build)-\(size).json")
-        if let data = try? Data(contentsOf: cache),
-           (try? JSONDecoder().decode(ModelPayload.self, from: data)) != nil {
-            memory[id] = data
-            return data
+        let data = try Data(contentsOf: url)
+        let model = try JSONDecoder().decode(ModelPayload.self, from: data)
+        guard model.id == id, model.appearanceVersion == 1, !model.parts.isEmpty,
+              model.parts.allSatisfy({ $0.indices != nil && $0.tangents != nil &&
+                  $0.texture != nil && $0.normalTexture != nil &&
+                  $0.roughnessTexture != nil && $0.metallicTexture != nil }) else {
+            throw FurnitureError.unsupportedGeometry
         }
-        let data = try autoreleasepool {
-            let scene: SCNScene
-            do {
-                scene = try SCNScene(url: url, options: [.convertToYUp: true])
-            } catch {
-                let asset = MDLAsset(url: url)
-                asset.loadTextures()
-                scene = SCNScene(mdlAsset: asset)
-            }
-            let catalog = try ProductCatalog()
-            guard let row = catalog.row(id: id) else { throw FurnitureError.missingModel(id) }
-            let dimensions = ["width_in", "height_in", "depth_in"].map {
-                (Double(row[$0] ?? "") ?? 32) * 0.0254
-            }
-            var model = try Self.export(scene: scene, id: id,
-                label: row["name"] ?? id, target: dimensions)
-            // Some USDZ imports expose unresolved image URLs. Model I/O can
-            // resolve the archive's textures while retaining its own geometry.
-            if !model.parts.contains(where: { $0.texture != nil }) {
-                let asset = MDLAsset(url: url)
-                asset.loadTextures()
-                if let textured = try? Self.export(scene: SCNScene(mdlAsset: asset), id: id,
-                    label: row["name"] ?? id, target: dimensions),
-                   textured.parts.contains(where: { $0.texture != nil }) {
-                    model = textured
-                }
-            }
-            return try JSONEncoder().encode(model)
-        }
-        memory[id] = data
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? data.write(to: cache, options: .atomic)
         return data
     }
 
@@ -66,6 +32,7 @@ actor FurnitureModelLibrary {
         let label: String
         let parts: [Part]
         let bounds: [[Float]]
+        var appearanceVersion: Int? = nil
     }
 
     struct Part: Codable {
@@ -78,6 +45,10 @@ actor FurnitureModelLibrary {
         let normalTexture: String?
         let normalStrength: Float?
         let roughnessTexture: String?
+        var indices: String? = nil
+        var tangents: String? = nil
+        var metallic: Float? = nil
+        var metallicTexture: String? = nil
     }
 
     /// Internal so the iOS test target can verify hierarchy, units and decoding

@@ -88,12 +88,28 @@ final class FurnitureTests: XCTestCase {
     }
 
     /// Run this with Product > Test on the Mac before a live demo.
-    func testOriginalBundledModelsImportWithTextures() async throws {
+    func testPreparedModelsLoadWithOriginalMaterialChannels() async throws {
         for id in FurnitureCatalog.modelIDs {
             XCTAssertNotNil(Bundle.main.url(forResource: id, withExtension: "usdz"))
             let data = try await FurnitureModelLibrary.shared.payload(for: id)
             let model = try JSONDecoder().decode(FurnitureModelLibrary.ModelPayload.self, from: data)
             XCTAssertEqual(model.id, id)
+            XCTAssertEqual(model.appearanceVersion, 1)
+            XCTAssertNotNil(Bundle.main.url(forResource: id, withExtension: "tuckmodel", subdirectory: "ChairMaterials"))
+            for part in model.parts {
+                let vertices = try XCTUnwrap(Data(base64Encoded: part.positions)).count / 12
+                XCTAssertGreaterThan(vertices, 100_000, "Original mesh must not be simplified")
+                XCTAssertEqual(try XCTUnwrap(Data(base64Encoded: part.tangents ?? "")).count, vertices * 16)
+                let indices = try XCTUnwrap(Data(base64Encoded: part.indices ?? ""))
+                XCTAssertGreaterThan(indices.count, 0)
+                XCTAssertTrue(indices.count.isMultiple(of: 12))
+                XCTAssertEqual(part.color, [1, 1, 1])
+                for map in [part.texture, part.normalTexture, part.roughnessTexture, part.metallicTexture] {
+                    let uri = try XCTUnwrap(map)
+                    let bytes = try XCTUnwrap(Data(base64Encoded: String(uri.split(separator: ",", maxSplits: 1)[1])))
+                    XCTAssertEqual(UIImage(data: bytes)?.size, CGSize(width: 2048, height: 2048))
+                }
+            }
             XCTAssertFalse(model.parts.isEmpty)
             XCTAssertGreaterThan(model.bounds[1][1], 0.3)
             XCTAssertLessThan(model.bounds[1][1], 1.5)

@@ -1,11 +1,14 @@
 const detachedControls=new Map();const $=id=>{let e=document.getElementById(id);if(e)return e;if(!detachedControls.has(id)){e=document.createElement(['asset','selected'].includes(id)?'select':'input');detachedControls.set(id,e)}return detachedControls.get(id)},canvas=$('c'),gl=canvas.getContext('webgl',{antialias:true,alpha:false});
 if(!gl){$('status').textContent='Open in a browser that supports WebGL.';throw Error('WebGL unavailable')}
-const vs=`attribute vec3 aPosition;attribute vec3 aNormal;attribute vec2 aUV;varying vec2 vUV;uniform mat4 uMVP;uniform mat4 uModel;uniform mat4 uLight;varying vec3 vNormal;varying vec3 vWorld;varying vec4 vShadow;void main(){vUV=aUV;vec4 w=uModel*vec4(aPosition,1.);vWorld=w.xyz;vNormal=mat3(uModel)*aNormal;vShadow=uLight*w;gl_Position=uMVP*w;}`;
+const vs=`attribute vec3 aPosition;attribute vec3 aNormal;attribute vec2 aUV;attribute vec4 aTangent;varying vec4 vTangent;varying vec2 vUV;uniform mat4 uMVP;uniform mat4 uModel;uniform mat4 uLight;varying vec3 vNormal;varying vec3 vWorld;varying vec4 vShadow;void main(){vTangent=vec4(mat3(uModel)*aTangent.xyz,aTangent.w);vUV=aUV;vec4 w=uModel*vec4(aPosition,1.);vWorld=w.xyz;vNormal=mat3(uModel)*aNormal;vShadow=uLight*w;gl_Position=uMVP*w;}`;
+const indexedGeometrySupported=!!gl.getExtension('OES_element_index_uint');
 const normalMapsSupported=!!gl.getExtension('OES_standard_derivatives');
 const fs=`${normalMapsSupported?'#extension GL_OES_standard_derivatives : enable\n#define TUCK_NORMAL_MAPS 1\n':''}precision highp float;
 varying vec2 vUV;uniform sampler2D uMap;uniform bool uHasMap;uniform vec3 uColor;uniform vec3 uEye;uniform float uKind;uniform float uRoughness;uniform sampler2D uShadow;
 varying vec3 vNormal;varying vec3 vWorld;varying vec4 vShadow;
 uniform bool uOriginalAppearance;
+varying vec4 vTangent;uniform bool uHasTangents;
+uniform sampler2D uMetallicMap;uniform bool uHasMetallicMap;uniform float uMetallic;
 uniform sampler2D uNormalMap;uniform bool uHasNormalMap;uniform float uNormalStrength;
 uniform sampler2D uRoughnessMap;uniform bool uHasRoughnessMap;
 #ifdef TUCK_NORMAL_MAPS
@@ -22,10 +25,32 @@ float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(ha
 float unpackDepth(vec3 c){return dot(c,vec3(1.,1./255.,1./65025.));}
 float visibility(vec3 normal){vec3 q=vShadow.xyz/vShadow.w*.5+.5;if(q.x<0.||q.x>1.||q.y<0.||q.y>1.||q.z<0.||q.z>1.)return 1.;float bias=max(.0007,.002*(1.-max(dot(normal,normalize(vec3(-3.,6.,4.))),0.)));float shade=0.;for(int x=-2;x<=2;x++)for(int y=-2;y<=2;y++){vec2 off=vec2(float(x),float(y))*(1.5/2048.);float d=unpackDepth(texture2D(uShadow,q.xy+off).rgb);shade+=q.z-bias<=d?1.:0.;}return shade/25.;}
 void main(){
-// These three supplied chairs already contain their surface detail. Display
-// their source color map without re-shading it with room shadows, normal maps,
-// roughness highlights, warm lighting or tone mapping.
-if(uOriginalAppearance){vec3 source=uColor;if(uHasMap)source*=texture2D(uMap,vUV).rgb;gl_FragColor=vec4(clamp(source,0.,1.),1.);return;}
+// Only the three product chairs use neutral studio illumination. Their source
+// maps/tangents are retained; room shadow-map acne and procedural grain are not
+// multiplied onto the upholstery. They still CAST shadows onto the room.
+if(uOriginalAppearance){
+ vec3 source=uColor;if(uHasMap)source*=texture2D(uMap,vUV).rgb;
+ vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;
+ if(uHasNormalMap&&uHasTangents){
+  vec3 t=normalize(vTangent.xyz-n*dot(n,vTangent.xyz));
+  vec3 b=cross(n,t)*vTangent.w;
+  vec3 detail=texture2D(uNormalMap,vUV).xyz*2.-1.;detail.xy*=uNormalStrength;
+  n=normalize(mat3(t,b,n)*detail);
+ }
+ vec3 v=normalize(uEye-vWorld),l=normalize(vec3(-.4,.85,.6));
+ float rough=clamp(uRoughness*(uHasRoughnessMap?texture2D(uRoughnessMap,vUV).r:1.),.05,1.);
+ float metal=clamp(uMetallic*(uHasMetallicMap?texture2D(uMetallicMap,vUV).r:1.),0.,1.);
+ // Color alone is sRGB. Normal, roughness and metal maps are linear data.
+ vec3 base=mix(source/12.92,pow((source+.055)/1.055,vec3(2.4)),step(vec3(.04045),source));
+ vec3 f0=mix(vec3(.04),base,metal);
+ vec3 fresnel=f0+(1.-f0)*pow(1.-max(dot(n,v),0.),5.);
+ vec3 reflected=reflect(-v,n);
+ float softbox=pow(max(dot(reflected,l),0.),mix(48.,2.,rough));
+ float studio=.35+.65*(n.y*.5+.5)+softbox*(1.-rough)*1.4;
+ vec3 col=base*(1.-metal)*(.76+.24*max(dot(n,l),0.))+fresnel*studio;
+ col=mix(col*12.92,1.055*pow(max(col,vec3(0.)),vec3(1./2.4))-.055,step(vec3(.0031308),col));
+ gl_FragColor=vec4(clamp(col,0.,1.),1.);return;
+}
 if(uKind>4.5){float light=.65+.35*max(dot(normalize(vNormal),normalize(vec3(-.4,.85,.35))),0.);gl_FragColor=vec4(uColor*light,1.);return;}vec3 n=normalize(vNormal);if(!gl_FrontFacing)n=-n;
 #ifdef TUCK_NORMAL_MAPS
 if(uHasNormalMap)n=mappedNormal(n);
@@ -46,15 +71,37 @@ const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER
 const ap=gl.getAttribLocation(program,'aPosition'),an=gl.getAttribLocation(program,'aNormal'),at=gl.getAttribLocation(program,'aUV'),ut=gl.getUniformLocation(program,'uMap'),uh=gl.getUniformLocation(program,'uHasMap'),um=gl.getUniformLocation(program,'uMVP'),ud=gl.getUniformLocation(program,'uModel'),uc=gl.getUniformLocation(program,'uColor');
 const un=gl.getUniformLocation(program,'uNormalMap'),uhn=gl.getUniformLocation(program,'uHasNormalMap'),uns=gl.getUniformLocation(program,'uNormalStrength'),urt=gl.getUniformLocation(program,'uRoughnessMap'),uhr=gl.getUniformLocation(program,'uHasRoughnessMap');
 const uo=gl.getUniformLocation(program,'uOriginalAppearance');
+const ag=gl.getAttribLocation(program,'aTangent'),ugt=gl.getUniformLocation(program,'uHasTangents');
+const umt=gl.getUniformLocation(program,'uMetallicMap'),uhm=gl.getUniformLocation(program,'uHasMetallicMap'),umetal=gl.getUniformLocation(program,'uMetallic');
 function sub(a,b){return a.map((v,i)=>v-b[i])}function dot(a,b){return a.reduce((s,v,i)=>s+v*b[i],0)}function cross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}function norm(a){let l=Math.hypot(...a);return a.map(v=>v/l)}
 function buffer(arr){let b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.STATIC_DRAW);return b}
 function floats(base64){const raw=atob(base64),bytes=new Uint8Array(raw.length);for(let k=0;k<raw.length;k++)bytes[k]=raw.charCodeAt(k);if(bytes.byteLength%4)throw Error('Invalid geometry buffer');return new Float32Array(bytes.buffer)}
 function upload(p){
- if(p.positions){const {positions,normals,uvs,...meta}=p,v=floats(positions),n=floats(normals),uv=floats(uvs);if(!v.length||v.length%9||n.length!==v.length||uv.length!==v.length/3*2||!v.every(Number.isFinite)||!n.every(Number.isFinite)||!uv.every(Number.isFinite))throw Error('Invalid chair geometry');return {...meta,positionsArray:v,v:buffer(v),n:buffer(n),uv:buffer(uv),count:v.length/3}}
+ if(p.positions){
+  const {positions,normals,uvs,indices,tangents,texture,normalTexture,roughnessTexture,metallicTexture,...meta}=p;
+  let v=floats(positions),n=floats(normals),uv=floats(uvs),t=tangents?floats(tangents):null;
+  let ix=indices?new Uint32Array(floats(indices).buffer):null;
+  if(!v.length||v.length%3||(!ix&&v.length%9)||n.length!==v.length||uv.length!==v.length/3*2||
+     !v.every(Number.isFinite)||!n.every(Number.isFinite)||!uv.every(Number.isFinite)||
+     (t&&(t.length!==v.length/3*4||!t.every(Number.isFinite)))||
+     (ix&&(!ix.length||ix.length%3||!ix.every(i=>i<v.length/3))))throw Error('Invalid chair geometry');
+  if(ix&&!indexedGeometrySupported){
+   const expand=(a,size)=>{const result=new Float32Array(ix.length*size);for(let k=0;k<ix.length;k++)for(let j=0;j<size;j++)result[k*size+j]=a[ix[k]*size+j];return result};
+   v=expand(v,3);n=expand(n,3);uv=expand(uv,2);if(t)t=expand(t,4);ix=null;
+  }
+  let indexBuffer=null;if(ix){indexBuffer=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,ix,gl.STATIC_DRAW)}
+  return {...meta,positionsArray:v,indicesArray:ix,indexBuffer,v:buffer(v),n:buffer(n),uv:buffer(uv),tangent:t?buffer(t):null,count:ix?ix.length:v.length/3};
+ }
  let v=[],n=[];for(let f of p.faces)for(let k=1;k<f.length-1;k++){let t=[p.vertices[f[0]],p.vertices[f[k]],p.vertices[f[k+1]]],nn=cross(sub(t[1],t[0]),sub(t[2],t[0]));if(Math.hypot(...nn)<1e-9)continue;nn=norm(nn);for(let j=0;j<3;j++){v.push(...t[j]);let ix=[f[0],f[k],f[k+1]][j];n.push(...(p.vertexNormals?.[ix]||nn))}}return{...p,v:buffer(v),n:buffer(n),count:v.length/3}
 }
 function eachVertex(part,fn){if(part.positionsArray){const p=part.positionsArray;for(let k=0;k<p.length;k+=3)fn([p[k],p[k+1],p[k+2]])}else for(const v of part.vertices)fn(v)}
-function eachTriangle(part,fn){if(part.positionsArray){const p=part.positionsArray;for(let k=0;k<p.length;k+=9)fn([p[k],p[k+1],p[k+2]],[p[k+3],p[k+4],p[k+5]],[p[k+6],p[k+7],p[k+8]])}else for(const f of part.faces)for(let k=1;k<f.length-1;k++)fn(part.vertices[f[0]],part.vertices[f[k]],part.vertices[f[k+1]])}
+function eachTriangle(part,fn){
+ if(part.positionsArray){const p=part.positionsArray,ix=part.indicesArray,point=i=>[p[i*3],p[i*3+1],p[i*3+2]];
+  if(ix){for(let k=0;k<ix.length;k+=3)fn(point(ix[k]),point(ix[k+1]),point(ix[k+2]))}
+  else for(let k=0;k<p.length;k+=9)fn([p[k],p[k+1],p[k+2]],[p[k+3],p[k+4],p[k+5]],[p[k+6],p[k+7],p[k+8]]);
+ }else for(const f of part.faces)for(let k=1;k<f.length-1;k++)fn(part.vertices[f[0]],part.vertices[f[k]],part.vertices[f[k+1]])
+}
+function drawGeometry(p){if(p.indexBuffer){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,p.indexBuffer);gl.drawElements(gl.TRIANGLES,p.count,gl.UNSIGNED_INT,0)}else gl.drawArrays(gl.TRIANGLES,0,p.count)}
 function localBounds(asset){if(!asset.bounds){const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(const p of asset.parts)eachVertex(p,v=>{for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],v[k]);hi[k]=Math.max(hi[k],v[k])}});asset.bounds=[lo,hi]}return asset.bounds}
 let roomObjects=room.parts.map(upload),assetMap=new Map(assets.map(a=>[a.id,{...a,objects:a.parts.map(upload)}]));
 function mul(a,b){let r=new Float32Array(16);for(let c=0;c<4;c++)for(let row=0;row<4;row++)for(let k=0;k<4;k++)r[c*4+row]+=a[k*4+row]*b[c*4+k];return r}
@@ -163,7 +210,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();radius=Math.max(3.4,Math.
 $('reverse').onclick=()=>{yaw=.78;pitch=.65;dirty=true};$('top').onclick=()=>{pitch=1.35;dirty=true};
 $('walls').onclick=e=>{autoWalls=!autoWalls;e.target.classList.toggle('active',autoWalls);dirty=true};$('roof').onclick=e=>{showRoof=!showRoof;e.target.classList.toggle('active',showRoof);dirty=true};$('reset').onclick=()=>{yaw=-.72;pitch=.62;radius=7.5;dirty=true};
 function resize(){let d=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(canvas.clientWidth*d);canvas.height=Math.round(canvas.clientHeight*d);gl.viewport(0,0,canvas.width,canvas.height);dirty=true}addEventListener('resize',resize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(canvas);resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(1,1,1,1);
-function draw(objects,m,eye,highlight=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uo,p.originalAppearance?1:0);gl.uniform1i(uh,p.map?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1i(uhn,normalMapsSupported&&p.normalMap?1:0);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,p.normalMap||shadowTexture);gl.uniform1i(un,2);gl.uniform1f(uns,p.normalStrength??1);gl.uniform1i(uhr,p.roughnessMap?1:0);gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,p.roughnessMap||shadowTexture);gl.uniform1i(urt,3);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness??.8);gl.uniform3fv(uc,highlight&&!p.preserveAppearance?p.color.map(v=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
+function draw(objects,m,eye,highlight=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}if(p.tangent){gl.bindBuffer(gl.ARRAY_BUFFER,p.tangent);gl.enableVertexAttribArray(ag);gl.vertexAttribPointer(ag,4,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(ag);gl.vertexAttrib4f(ag,1,0,0,1)}gl.uniform1i(ugt,p.tangent?1:0);gl.uniform1i(uo,p.originalAppearance?1:0);gl.uniform1i(uh,p.map?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1i(uhn,p.normalMap&&(p.tangent||normalMapsSupported)?1:0);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,p.normalMap||shadowTexture);gl.uniform1i(un,2);gl.uniform1f(uns,p.normalStrength??1);gl.uniform1i(uhr,p.roughnessMap?1:0);gl.activeTexture(gl.TEXTURE3);gl.bindTexture(gl.TEXTURE_2D,p.roughnessMap||shadowTexture);gl.uniform1i(urt,3);gl.activeTexture(gl.TEXTURE4);gl.bindTexture(gl.TEXTURE_2D,p.metallicMap||shadowTexture);gl.uniform1i(umt,4);gl.uniform1i(uhm,p.metallicMap?1:0);gl.uniform1f(umetal,p.metallic??0);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness??.8);gl.uniform3fv(uc,highlight&&!p.preserveAppearance?p.color.map(v=>Math.min(1,v*.70+.30)):p.color);drawGeometry(p)}}
 // A real directional shadow pass, shared by the room and every movable instance.
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
 let lightMatrix=mul(ortho(-4.8,4.8,-4.8,4.8,.1,22),look([-4.5,9,6],[0,.5,0]));
@@ -172,8 +219,8 @@ const sap=gl.getAttribLocation(shadowProgram,'aPosition'),sul=gl.getUniformLocat
 const shadowTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,2048,2048,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
 const shadowBuffer=gl.createFramebuffer(),shadowDepth=gl.createRenderbuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,shadowBuffer);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,shadowTexture,0);gl.bindRenderbuffer(gl.RENDERBUFFER,shadowDepth);gl.renderbufferStorage(gl.RENDERBUFFER,gl.DEPTH_COMPONENT16,2048,2048);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,shadowDepth);if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw Error('Unable to create shadow buffer.');gl.bindFramebuffer(gl.FRAMEBUFFER,null);
 function hidden(p,eye){if(p.wall==='scan')return autoWalls&&dot(p.cutawayNormal,sub(eye,p.cutawayCenter))>0;return(p.wall==='roof'&&!showRoof)||(autoWalls&&p.wall&&((p.wall==='front'&&eye[2]>0)||(p.wall==='back'&&eye[2]<0)||(p.wall==='left'&&eye[0]<0)||(p.wall==='right'&&eye[0]>0)))}
-function shadowDraw(objects,m,eye){gl.uniformMatrix4fv(sud,false,m);for(let p of objects){if(hidden(p,eye)||p.materialKind===4)continue;gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(sap);gl.vertexAttribPointer(sap,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
-function render(){if(dirty){dirty=false;let eye=camera();gl.bindFramebuffer(gl.FRAMEBUFFER,shadowBuffer);gl.viewport(0,0,2048,2048);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(shadowProgram);gl.disableVertexAttribArray(an);gl.disableVertexAttribArray(at);gl.uniformMatrix4fv(sul,false,lightMatrix);shadowDraw(roomObjects,identity,eye);for(let i of items)shadowDraw(assetMap.get(i.assetId).objects,model(i),eye);
+function shadowDraw(objects,m,eye){gl.uniformMatrix4fv(sud,false,m);for(let p of objects){if(hidden(p,eye)||p.materialKind===4)continue;gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(sap);gl.vertexAttribPointer(sap,3,gl.FLOAT,false,0,0);drawGeometry(p)}}
+function render(){if(dirty){dirty=false;let eye=camera();gl.bindFramebuffer(gl.FRAMEBUFFER,shadowBuffer);gl.viewport(0,0,2048,2048);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(shadowProgram);gl.disableVertexAttribArray(an);gl.disableVertexAttribArray(at);gl.disableVertexAttribArray(ag);gl.uniformMatrix4fv(sul,false,lightMatrix);shadowDraw(roomObjects,identity,eye);for(let i of items)shadowDraw(assetMap.get(i.assetId).objects,model(i),eye);
 gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,sceneTarget)));draw(roomObjects,identity,eye);for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected);drawAxisGizmo(eye);positionLabels()}requestAnimationFrame(render)}
 // Scanned-room adapter. Raw RoomPlan geometry stays immutable; editor items carry changes.
 let scannedSource=null;
@@ -320,13 +367,13 @@ function renameSelected(value){const i=chosen();if(!i)return;const name=Array.fr
 function removeSelected(){if(!chosen())return;items=items.filter(i=>i.instanceId!==selected);selected=null;showAxis(null);sync();commitLayout()}
 function post(type,extra={}){window.webkit?.messageHandlers?.furniture?.postMessage({type,furnitureMoveEnabled,...extra})}
 function commitLayout(){if(bridgeActive)post('layout',{layout:layout()})}
-async function texture(url){
- if(!url)return null;if(textureCache.has(url))return textureCache.get(url);
- const promise=new Promise((resolve,reject)=>{const image=new Image(),timeout=setTimeout(()=>reject(Error('Chair texture timed out')),15000);image.onload=()=>{clearTimeout(timeout);const map=gl.createTexture();gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,map);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);const powerOfTwo=n=>(n&(n-1))===0,wrap=powerOfTwo(image.width)&&powerOfTwo(image.height)?gl.REPEAT:gl.CLAMP_TO_EDGE;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,wrap);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,wrap);resolve(map)};image.onerror=()=>{clearTimeout(timeout);reject(Error('Chair texture could not be loaded'))};image.src=url});textureCache.set(url,promise);try{return await promise}catch(error){textureCache.delete(url);throw error}
+async function texture(url,key){
+ if(!url)return null;if(textureCache.has(key))return textureCache.get(key);
+ const promise=new Promise((resolve,reject)=>{const image=new Image(),timeout=setTimeout(()=>reject(Error('Chair texture timed out')),15000);image.onload=()=>{clearTimeout(timeout);const map=gl.createTexture();gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,map);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);const powerOfTwo=n=>(n&(n-1))===0,wrap=powerOfTwo(image.width)&&powerOfTwo(image.height)?gl.REPEAT:gl.CLAMP_TO_EDGE;gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,wrap);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,wrap);if(wrap===gl.REPEAT){gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR)}resolve(map)};image.onerror=()=>{clearTimeout(timeout);reject(Error('Chair texture could not be loaded'))};image.src=url});textureCache.set(key,promise);try{return await promise}catch(error){textureCache.delete(key);throw error}
 }
 async function register(payload){
  const allowed=['sofa_007_brown','sofa_027_brown','sofa_028_brown'];if(!payload||!allowed.includes(payload.id)||!Array.isArray(payload.parts)||!payload.parts.length)throw Error('Unknown chair model');if(assetMap.has(payload.id))return true;
- const objects=[];try{for(const part of payload.parts){const object=upload(part);objects.push(object);object.preserveAppearance=true;object.originalAppearance=true;object.map=await texture(part.texture)}}catch(error){for(const o of objects){gl.deleteBuffer(o.v);gl.deleteBuffer(o.n);if(o.uv)gl.deleteBuffer(o.uv)}throw error}
+ const objects=[];try{for(const [index,part] of payload.parts.entries()){const object=upload(part);objects.push(object);object.preserveAppearance=true;object.originalAppearance=true;object.map=await texture(part.texture,`${payload.id}:${index}:color`);object.normalMap=await texture(part.normalTexture,`${payload.id}:${index}:normal`);object.roughnessMap=await texture(part.roughnessTexture,`${payload.id}:${index}:roughness`);object.metallicMap=await texture(part.metallicTexture,`${payload.id}:${index}:metallic`)}}catch(error){for(const o of objects){gl.deleteBuffer(o.v);gl.deleteBuffer(o.n);if(o.uv)gl.deleteBuffer(o.uv);if(o.tangent)gl.deleteBuffer(o.tangent);if(o.indexBuffer)gl.deleteBuffer(o.indexBuffer)}throw error}
  assetMap.set(payload.id,{id:payload.id,productID:payload.id,label:payload.label,parts:objects,objects,defaultTransform:{position:[0,0,0],yawRadians:0},bounds:payload.bounds,optional:true});dirty=true;return true
 }
 function footprint(assetId,position,yawRadians=0){const asset=assetMap.get(assetId),b=localBounds(asset),i={position,yawRadians},corners=[];for(const x of[b[0][0],b[1][0]])for(const z of[b[0][2],b[1][2]])corners.push(world([x,0,z],i));return{low:[Math.min(...corners.map(v=>v[0])),Math.min(...corners.map(v=>v[2]))],high:[Math.max(...corners.map(v=>v[0])),Math.max(...corners.map(v=>v[2]))]}}

@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "sofa_007_brown",
+      "sourceSHA256": "89742605d7a3ace2a4b941b619df63cbb74735524cda5e4bd8ea4db8e7ea2045",
+      "outputSHA256": "5e8bbb547a4dfb15220306127a14e22b4f4161acb367d4336082c89c78cce23b",
+      "vertices": 166937,
+      "triangles": 295386,
+      "maps": {
+        "diffuseColor": {
+          "path": "extracted_image_1.jpg",
+          "sourceSHA256": "df3d5cc909d8eab6e63efb6fb4658764708feae0ed8feb240e4fab0765161cd8",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "normal": {
+          "path": "extracted_image_0.jpg",
+          "sourceSHA256": "d20c447b51f915c4e3a34fcb24bf9576644d8022611e56ea8b8ffdcb5307ef1c",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "roughness": {
+          "path": "extracted_image_2.jpg_roughness.png",
+          "sourceSHA256": "7d8fd90c44301242164ffbfdd58b1fc0f9c9c470f1c5e1cd199401c6240a2408",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "metallic": {
+          "path": "extracted_image_2.jpg_metallic.png",
+          "sourceSHA256": "0e45de11052d7f7a3013c4b98418709f321e286b8b2d26392974b4f48d822cc6",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        }
+      }
+    },
+    {
+      "id": "sofa_027_brown",
+      "sourceSHA256": "f623b06ecdf24b9787fe9f13d57f0b620da455c9fbed35780601c4ca166c19ab",
+      "outputSHA256": "d51af3da215630ebaf3ea4503f1c383ae6accb74ec4d81165c049266e9d02493",
+      "vertices": 158676,
+      "triangles": 291522,
+      "maps": {
+        "diffuseColor": {
+          "path": "extracted_image_0.jpg",
+          "sourceSHA256": "dab91a2222e8a21a93418daff5b18889f1f7c65fd61abff22e40395190be095a",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "normal": {
+          "path": "extracted_image_2.jpg",
+          "sourceSHA256": "8e651e764fb84f168d0f6c170e74d3dfc8ff07307c50dc2cc7297705402826f6",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "roughness": {
+          "path": "extracted_image_1.jpg_roughness.png",
+          "sourceSHA256": "75ace7b38c51c1ead1a28e37a197e74eadb09c2347b37edd691d0de84b1ab705",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "metallic": {
+          "path": "extracted_image_1.jpg_metallic.png",
+          "sourceSHA256": "a133c9f4949051494585ae30801a914431d7b3254d474924e898b23b1eb2deb8",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        }
+      }
+    },
+    {
+      "id": "sofa_028_brown",
+      "sourceSHA256": "8475435447520ba125d9cbc6926ca28aadd0850bbb7d0cd9b8f969096b14d89e",
+      "outputSHA256": "9f6126a121c9dcbbe76ed87a198642b67b884bcdf9e95061b6c4f334894621a3",
+      "vertices": 189211,
+      "triangles": 310968,
+      "maps": {
+        "diffuseColor": {
+          "path": "extracted_image_0.jpg",
+          "sourceSHA256": "855d9e7430ef3afd79c07b277d5375a4e0f27b6b0188b8c22caf64f39fecd743",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "normal": {
+          "path": "extracted_image_2.jpg",
+          "sourceSHA256": "8b8eaaccfa09c853ae1ace4056a248cca7064914450f883af619cc49aa6f25b5",
+          "sourceSize": [
+            4096,
+            4096
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "roughness": {
+          "path": "extracted_image_1.jpg_roughness.png",
+          "sourceSHA256": "bc729760b3d3e0b68274b63c2b7912a7f93d08ae7ccdcfd8226fd3c13ba5259c",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        },
+        "metallic": {
+          "path": "extracted_image_1.jpg_metallic.png",
+          "sourceSHA256": "3967427303e6fc7eeae6d292b958bd3fd960bf3951e843687b53289045cf39ac",
+          "sourceSize": [
+            2048,
+            2048
+          ],
+          "outputSize": [
+            2048,
+            2048
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -9,20 +9,20 @@ const html = fs.readFileSync(path.join(root, 'Tuck/Resources/DemoRoom.html'), 'u
 const dataScript = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const editorScript = fs.readFileSync(path.join(root, 'Tuck/Resources/DemoFurniture.js'), 'utf8');
 
-function roomContext({normalMaps = true} = {}) {
+function roomContext({normalMaps = true, indexed = true} = {}) {
   const ids = new Map(), events = [], draws = [], materials = [], images = [], uniforms = new Map(), textures = new Map();
   let activeTexture;
-  let constant = 100, boundBuffer, nextID = 0;
+  let constant = 100, boundBuffer, elementBuffer, nextID = 0;
   const constants = new Map(), pointers = new Map(), enabled = new Set();
   const gl = new Proxy({
     createBuffer: () => ({id: ++nextID}),
-    bindBuffer: (_, buffer) => { boundBuffer = buffer; },
-    bufferData: (_, data) => { boundBuffer.length = data.length; },
+    bindBuffer: (target, buffer) => { if (target === gl.ELEMENT_ARRAY_BUFFER) elementBuffer = buffer; else boundBuffer = buffer; },
+    bufferData: (target, data) => { const b = target === gl.ELEMENT_ARRAY_BUFFER ? elementBuffer : boundBuffer; b.length = data.length; b.data = data; },
     getShaderParameter: () => true, getProgramParameter: () => true,
     checkFramebufferStatus: () => gl.FRAMEBUFFER_COMPLETE,
-    getAttribLocation: (_, name) => ({aPosition: 0, aNormal: 1, aUV: 2}[name]),
+    getAttribLocation: (_, name) => ({aPosition: 0, aNormal: 1, aUV: 2, aTangent: 3}[name]),
     getUniformLocation: (_, name) => name,
-    getExtension: name => name === 'OES_standard_derivatives' && normalMaps ? {} : null,
+    getExtension: name => (name === 'OES_standard_derivatives' && normalMaps || name === 'OES_element_index_uint' && indexed) ? {} : null,
     activeTexture: unit => { activeTexture = unit; },
     bindTexture: (_, texture) => textures.set(activeTexture, texture),
     uniform1i: (name, value) => uniforms.set(name, value),
@@ -31,6 +31,12 @@ function roomContext({normalMaps = true} = {}) {
     enableVertexAttribArray: index => enabled.add(index),
     disableVertexAttribArray: index => enabled.delete(index),
     vertexAttribPointer: (index, size) => pointers.set(index, {size, buffer: boundBuffer}),
+    drawElements: (mode, count, type, offset) => {
+      assert(elementBuffer && elementBuffer.length >= count);
+      assert.equal(type, gl.UNSIGNED_INT); assert.equal(offset, 0);
+      let maximum = 0; for (let i=0;i<count;i++) maximum=Math.max(maximum, elementBuffer.data[i]);
+      gl.drawArrays(mode, 0, maximum + 1);
+    },
     drawArrays: (_, first, count) => {
       for (const index of enabled) {
         const value = pointers.get(index);
@@ -39,7 +45,7 @@ function roomContext({normalMaps = true} = {}) {
       }
       draws.push(count);
       if (enabled.has(2)) materials.push({color: uniforms.get('uColor'), original: uniforms.get('uOriginalAppearance'), normal: uniforms.get('uHasNormalMap'),
-        roughness: uniforms.get('uHasRoughnessMap'), normalTexture: textures.get(gl.TEXTURE2),
+        roughness: uniforms.get('uHasRoughnessMap'), metallic: uniforms.get('uHasMetallicMap'), tangents: uniforms.get('uHasTangents'), normalTexture: textures.get(gl.TEXTURE2),
         roughnessTexture: textures.get(gl.TEXTURE3)});
     },
   }, {get(target, key) {
@@ -77,7 +83,7 @@ function roomContext({normalMaps = true} = {}) {
   }
   const context = vm.createContext({console, document, Image,
     Option: function(text, value) { this.text = text; this.value = value; },
-    Float32Array, Uint8Array, Map, Set, Math, Number, Array, Error, Promise,
+    Float32Array, Uint8Array, Uint32Array, Map, Set, Math, Number, Array, Error, Promise,
     atob: value => Buffer.from(value, 'base64').toString('binary'),
     innerWidth: 390, innerHeight: 310, devicePixelRatio: 1,
     requestAnimationFrame: callback => { context.nextFrame = callback; },
@@ -109,7 +115,7 @@ function fixture(id) {
     parts: [{positions: pack(positions), normals: pack(normals), uvs: pack(Array(72).fill(0)),
       color: [.5,.3,.15], roughness: .7, texture: 'data:image/png;base64,fixture',
       normalTexture: 'data:image/png;base64,normal', normalStrength: .6,
-      roughnessTexture: 'data:image/png;base64,roughness'}]};
+      roughnessTexture: 'data:image/png;base64,roughness', metallic: 1, metallicTexture: 'data:image/png;base64,metallic'}]};
 }
 
 const clean = value => JSON.parse(JSON.stringify(value));
@@ -135,13 +141,28 @@ const clean = value => JSON.parse(JSON.stringify(value));
   for (const material of a.materials) {
     assert.deepEqual(material.color, [.5,.3,.15], 'Selection must not recolor an original chair');
     assert.equal(material.original, 1);
-    assert.equal(material.normal, 0); assert.equal(material.roughness, 0);
+    assert.equal(material.normal, 1); assert.equal(material.roughness, 1); assert.equal(material.metallic, 1);
   }
-  assert(a.images.every(url => url === 'data:image/png;base64,fixture'), 'Only original color textures are loaded for the three chairs');
+  assert.equal(new Set(a.images).size, 4, 'Load and share all four original surface maps');
   const fallback = roomContext({normalMaps: false});
   await fallback.api.register(fixture(ids[0])); fallback.api.tryProduct(ids[0]); fallback.frame();
   assert(fallback.materials.length > 0);
-  assert(fallback.materials.every(material => material.original === 1 && material.normal === 0 && material.roughness === 0));
+  assert(fallback.materials.every(material => material.original === 1 && material.normal === 0 && material.roughness === 1));
+  for (const indexed of [true, false]) {
+    const indexedRoom = roomContext({indexed, normalMaps: false});
+    const model = fixture(ids[0]), part = model.parts[0];
+    const vertexCount = Buffer.from(part.positions, 'base64').length / 12;
+    part.indices = Buffer.from(new Uint32Array(Array.from({length: vertexCount}, (_, i) => i)).buffer).toString('base64');
+    part.tangents = Buffer.from(new Float32Array(Array.from({length: vertexCount}, () => [1,0,0,1]).flat()).buffer).toString('base64');
+    await indexedRoom.api.register(model); indexedRoom.api.tryProduct(ids[0]); indexedRoom.frame();
+    assert(indexedRoom.materials.every(m => m.normal === 1 && m.tangents === 1), 'Authored tangents work without derivatives');
+    const item = indexedRoom.api.layout().items.find(i => i.productID === ids[0]);
+    indexedRoom.api.restore({version:1,units:'meters',upAxis:'Y',items:[item]});
+    const hit = indexedRoom.editor.pick({origin:[item.position[0],item.position[1]+.4,item.position[2]+2],dir:[0,0,-1]});
+    assert.equal(hit?.item.productID, ids[0], 'Indexed model remains pickable');
+    const broken = fixture(ids[1]); broken.parts[0].indices = Buffer.from(new Uint32Array([0,1,999999]).buffer).toString('base64');
+    await assert.rejects(() => indexedRoom.api.register(broken), /Invalid chair geometry/);
+  }
   const product = api.layout().items.find(i => i.productID === ids[0]);
   editor.setTransform(product.instanceId, [0,0,.15], .3);
   api.select(product.instanceId); api.rename('My reading chair'); api.rotate(15);
