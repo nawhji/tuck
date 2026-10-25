@@ -42,7 +42,7 @@ const identity=model({position:[0,0,0],yawRadians:0});
 let items=[],selected=null,serial=0,mode='orbit',yaw=-.72,pitch=.62,radius=7.5,autoWalls=true,showRoof=true,dirty=true;
 const chosen=()=>items.find(i=>i.instanceId===selected);
 function message(s){$('status').textContent=s}
-function sync(){updateRotationHUD();updateFurnitureUI();const pick=$('selected');pick.replaceChildren();if(!items.length){let o=new Option('No furniture added','');pick.add(o)}for(let i of items)pick.add(new Option(assetMap.get(i.assetId).label+' · '+i.instanceId,i.instanceId));pick.value=selected||'';const i=chosen();for(let id of ['x','y','z','angle','left','right','remove','restore'])$(id).disabled=!i;for(let [id,k] of [['x',0],['y',1],['z',2]])$(id).value=i?Number(i.position[k].toFixed(3)):'';$('angle').value=i?Number((i.yawRadians*180/Math.PI).toFixed(1)):'';dirty=true}
+function sync(){updateOverlaps();updateRotationHUD();const pick=$('selected');pick.replaceChildren();if(!items.length){let o=new Option('No furniture added','');pick.add(o)}for(let i of items)pick.add(new Option(assetMap.get(i.assetId).label+' · '+i.instanceId,i.instanceId));pick.value=selected||'';const i=chosen();for(let id of ['x','y','z','angle','left','right','remove','restore'])$(id).disabled=!i;for(let [id,k] of [['x',0],['y',1],['z',2]])$(id).value=i?Number(i.position[k].toFixed(3)):'';$('angle').value=i?Number((i.yawRadians*180/Math.PI).toFixed(1)):'';dirty=true}
 function add(id){const a=assetMap.get(id);if(!a)return;let item={instanceId:id+'_'+(++serial),assetId:id,position:[...a.defaultTransform.position],yawRadians:0};items.push(item);selected=item.instanceId;sync();message(a.label+' added.');return item}
 for(let a of assets)$('asset').add(new Option(a.label+(a.optional?' (Optional)':''),a.id));
 $('add').onclick=()=>add($('asset').value);
@@ -84,6 +84,109 @@ function triangleHit(r,a,b,c){let e1=sub(b,a),e2=sub(c,a),p=cross(r.dir,e2),det=
 function hitsBounds(r,item){const c=Math.cos(item.yawRadians),s=Math.sin(item.yawRadians),o=sub(r.origin,item.position),origin=[c*o[0]-s*o[2],o[1],s*o[0]+c*o[2]],d=r.dir,dir=[c*d[0]-s*d[2],d[1],s*d[0]+c*d[2]],bounds=localBounds(assetMap.get(item.assetId));let near=0,far=Infinity;for(let k=0;k<3;k++){if(Math.abs(dir[k])<1e-8){if(origin[k]<bounds[0][k]||origin[k]>bounds[1][k])return false;continue}let a=(bounds[0][k]-origin[k])/dir[k],b=(bounds[1][k]-origin[k])/dir[k];near=Math.max(near,Math.min(a,b));far=Math.min(far,Math.max(a,b));if(far<near)return false}return true}
 function pick(r){let best=null,dist=Infinity;for(const i of items){if(!hitsBounds(r,i))continue;for(const p of assetMap.get(i.assetId).parts)eachTriangle(p,(a,b,c)=>{const d=triangleHit(r,world(a,i),world(b,i),world(c,i));if(d<dist){dist=d;best=i}})}return best?{item:best,point:r.origin.map((v,k)=>v+dist*r.dir[k])}:null}
 function plane(r,height){if(Math.abs(r.dir[1])<1e-5)return null;let t=(height-r.origin[1])/r.dir[1];return t>0?r.origin.map((v,k)=>v+t*r.dir[k]):null}
+// Geometry operates in meters. Visual dimensions are rendered in screen pixels.
+const layoutBoundsCache=new WeakMap();
+let overlapIDs=new Set(),snapSurfaceCache=null;
+function localFurnitureBounds(asset){const [lo,hi]=localBounds(asset);return{lo,hi}}
+function furnitureBox(item){
+ const b=localFurnitureBounds(assetMap.get(item.assetId)),c=Math.cos(item.yawRadians),s=Math.sin(item.yawRadians);
+ return{center:world(b.lo.map((v,k)=>(v+b.hi[k])/2),item),half:b.lo.map((v,k)=>(b.hi[k]-v)/2),axes:[[c,0,-s],[0,1,0],[s,0,c]]};
+}
+function boxRadius(box,n){return box.half.reduce((sum,h,k)=>sum+h*Math.abs(dot(box.axes[k],n)),0)}
+function boxesOverlap(a,b){
+ // Yaw-only oriented bounds: four horizontal SAT axes plus vertical overlap.
+ const separation=sub(b.center,a.center);
+ return[a.axes[0],a.axes[2],b.axes[0],b.axes[2],[0,1,0]].every(n=>boxRadius(a,n)+boxRadius(b,n)-Math.abs(dot(separation,n))>.002);
+}
+function updateOverlaps(){
+ const next=new Set(),boxes=items.map(furnitureBox);
+ for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++)if(boxesOverlap(boxes[i],boxes[j])){next.add(items[i].instanceId);next.add(items[j].instanceId)}
+ overlapIDs=next;
+}
+function snapSurfaces(){
+ if(snapSurfaceCache?.parts===activeRoomParts)return snapSurfaceCache.faces;
+ const faces=[];
+ for(const part of activeRoomParts){
+  const floor=/floor/i.test(part.name)&&!part.wall;
+  const wall=/wall|atticroomslope|continuouscloset/i.test(part.name);
+  if(!floor&&!wall)continue; // Never use furniture, doors, rails or window frames.
+  for(const face of part.faces){
+   const points=face.map(i=>part.vertices[i]);
+   const raw=cross(sub(points[1],points[0]),sub(points[2],points[0]));
+   if(Math.hypot(...raw)<1e-8)continue;
+   const normal=norm(raw);
+   if(floor&&normal[1]<.99)continue; // Top of the floor only.
+   if(wall&&Math.abs(normal[1])>.95)continue; // No wall caps/ceiling snapping.
+   faces.push({points,normal,floor});
+  }
+ }
+ snapSurfaceCache={parts:activeRoomParts,faces};return faces;
+}
+function pointInSurface(point,surface){
+ // Triangle fan avoids treating the infinite extension of a wall as a surface.
+ const a=surface.points[0];
+ for(let k=1;k<surface.points.length-1;k++){
+  const u=sub(surface.points[k],a),v=sub(surface.points[k+1],a),w=sub(point,a);
+  const uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v),d=uu*vv-uv*uv;
+  if(d<1e-12)continue;
+  const x=(wu*vv-wv*uv)/d,y=(wv*uu-wu*uv)/d;
+  if(x>=-1e-6&&y>=-1e-6&&x+y<=1+1e-6)return true;
+ }
+ return false;
+}
+function snapToStructure(item,axis,referencePosition=item.position){
+ const box=furnitureBox(item),reference={...item,position:referencePosition},referenceCenter=furnitureBox(reference).center;
+ let best=null;
+ for(const surface of snapSurfaces()){
+  if(surface.floor&&axis!==1)continue;
+  let n=surface.normal;
+  if(!surface.floor&&dot(sub(referenceCenter,surface.points[0]),n)<0)n=n.map(v=>-v);
+  if(Math.abs(n[axis])<.25)continue;
+  const gap=dot(sub(box.center,surface.points[0]),n)-boxRadius(box,n);
+  const delta=-gap/n[axis];
+  if(Math.abs(delta)>.065)continue;
+  const contact=box.center.map((v,k)=>v+(k===axis?delta:0)-n[k]*boxRadius(box,n));
+  if(!pointInSurface(contact,surface))continue;
+  if(best===null||Math.abs(delta)<Math.abs(best))best=delta;
+ }
+ if(best!==null)item.position[axis]+=best;
+ return best;
+}
+function resetViewState(){
+ dragging=null;orbitStart=null;lastPinch=null;pinchGesture=false;pointers.clear();
+ selected=null;showAxis(null);autoWalls=true;showRoof=true;yaw=-.72;pitch=.62;radius=7.5;
+ canvas.style.cursor='default';sync();return null;
+}
+function dimensionSegments(item){
+ const b=localFurnitureBounds(assetMap.get(item.assetId)),lo=b.lo,hi=b.hi;
+ return[
+  {label:'W',meters:hi[0]-lo[0],a:[lo[0],lo[1],hi[2]],b:[hi[0],lo[1],hi[2]]},
+  {label:'D',meters:hi[2]-lo[2],a:[hi[0],lo[1],lo[2]],b:[hi[0],lo[1],hi[2]]},
+  {label:'H',meters:hi[1]-lo[1],a:[lo[0],lo[1],lo[2]],b:[lo[0],hi[1],lo[2]]}
+ ].map(d=>({...d,a:world(d.a,item),b:world(d.b,item)}));
+}
+function dimensionMarkup(item){
+ const rect=canvas.getBoundingClientRect(),center=project(boundsCenter(item));
+ if(!center)return'';
+ let markup='';
+ for(const d of dimensionSegments(item)){
+  const a=project(d.a),b=project(d.b);if(!a||!b||d.meters<.001)continue;
+  const dx=b[0]-a[0],dy=b[1]-a[1],length=Math.hypot(dx,dy);if(length<18)continue;
+  let n=[-dy/length,dx/length];
+  if(dot([((a[0]+b[0])/2-center[0]),((a[1]+b[1])/2-center[1])],n)<0)n=n.map(v=>-v);
+  const start=a.map((v,k)=>v+n[k]*20-(k===0?rect.left:rect.top)),end=b.map((v,k)=>v+n[k]*20-(k===0?rect.left:rect.top));
+  const mid=start.map((v,k)=>(v+end[k])/2+n[k]*14),label=d.label+' '+(d.meters/.0254).toFixed(1)+'″',w=label.length*7+14;
+  const path=`M ${start[0]} ${start[1]} L ${end[0]} ${end[1]} `+[start,end].map(p=>`M ${p[0]-n[0]*5} ${p[1]-n[1]*5} L ${p[0]+n[0]*5} ${p[1]+n[1]*5}`).join(' ');
+  markup+=`<path d="${path}"/><rect x="${mid[0]-w/2}" y="${mid[1]-10}" width="${w}" height="20" rx="6"/><text x="${mid[0]}" y="${mid[1]+4}">${label}</text>`;
+ }
+ return markup;
+}
+function updateDimensions(){
+ const overlay=document.getElementById('dimensionsOverlay');if(!overlay)return;
+ const item=furnitureMoveEnabled?chosen():null;
+ overlay.innerHTML=item?dimensionMarkup(item):'';
+}
+
 // World-axis movement. The furniture's geometric center is a hidden pivot.
 const axisVectors=[[1,0,0],[0,1,0],[0,0,1]],axisNames=['X','Y','Z'];
 let activeAxis=null,activeDirection=1,pinchGesture=false;
@@ -126,7 +229,7 @@ canvas.addEventListener('pointermove',e=>{
   const axis=dragging.axis,current=axisParameter(ray(e.clientX,e.clientY),dragging.center,axis);let distance;
   if(current!==null&&dragging.startParameter!==null)distance=current-dragging.startParameter;
   else{const s=screenAxis(dragging.center,axis);if(!s)return;distance=(dx*s.unit[0]+dy*s.unit[1])/s.length}
-  if(Number.isFinite(distance)){if(dragging.previousDistance===undefined&&Math.abs(distance)>1e-5)activeDirection=Math.sign(distance);dragging.previousDistance=distance;item.position=[...dragging.position];item.position[axis]+=distance;sync()}
+  if(Number.isFinite(distance)){if(dragging.previousDistance===undefined&&Math.abs(distance)>1e-5)activeDirection=Math.sign(distance);dragging.previousDistance=distance;item.position=[...dragging.position];item.position[axis]+=distance;snapToStructure(item,axis,dragging.position);sync()}
  }else{yaw-=(e.clientX-old[0])*.009;pitch=Math.max(.12,Math.min(1.48,pitch+(e.clientY-old[1])*.007))}
  dirty=true;
 });
@@ -139,7 +242,7 @@ canvas.addEventListener('wheel',e=>{e.preventDefault();radius=Math.max(3.4,Math.
 $('reverse').onclick=()=>{yaw=.78;pitch=.65;dirty=true};$('top').onclick=()=>{pitch=1.35;dirty=true};
 $('walls').onclick=e=>{autoWalls=!autoWalls;e.target.classList.toggle('active',autoWalls);dirty=true};$('roof').onclick=e=>{showRoof=!showRoof;e.target.classList.toggle('active',showRoof);dirty=true};$('reset').onclick=()=>{yaw=-.72;pitch=.62;radius=7.5;dirty=true};
 function resize(){let d=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(canvas.clientWidth*d);canvas.height=Math.round(canvas.clientHeight*d);gl.viewport(0,0,canvas.width,canvas.height);dirty=true}addEventListener('resize',resize);if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(canvas);resize();gl.enable(gl.DEPTH_TEST);gl.clearColor(1,1,1,1);
-function draw(objects,m,eye,highlight=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uh,p.map?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness??.8);gl.uniform3fv(uc,highlight?p.color.map(v=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
+function draw(objects,m,eye,highlight=false,overlap=false){gl.uniformMatrix4fv(ud,false,m);for(let p of objects){if(hidden(p,eye))continue;if(p.singleSided){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK)}else gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(ap);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.bindBuffer(gl.ARRAY_BUFFER,p.n);gl.enableVertexAttribArray(an);gl.vertexAttribPointer(an,3,gl.FLOAT,false,0,0);if(p.uv){gl.bindBuffer(gl.ARRAY_BUFFER,p.uv);gl.enableVertexAttribArray(at);gl.vertexAttribPointer(at,2,gl.FLOAT,false,0,0)}else{gl.disableVertexAttribArray(at);gl.vertexAttrib2f(at,0,0)}gl.uniform1i(uh,p.map&&!overlap?1:0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,p.map||shadowTexture);gl.uniform1i(ut,1);gl.uniform1f(uk,p.materialKind||0);gl.uniform1f(ur,p.roughness??.8);gl.uniform3fv(uc,overlap?[.93,.13,.12]:highlight?p.color.map(v=>Math.min(1,v*.70+.30)):p.color);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
 // A real directional shadow pass, shared by the room and every movable instance.
 function ortho(l,r,b,t,n,f){return new Float32Array([2/(r-l),0,0,0,0,2/(t-b),0,0,0,0,-2/(f-n),0,-(r+l)/(r-l),-(t+b)/(t-b),-(f+n)/(f-n),1])}
 let lightMatrix=mul(ortho(-4.8,4.8,-4.8,4.8,.1,22),look([-4.5,9,6],[0,.5,0]));
@@ -150,14 +253,14 @@ const shadowBuffer=gl.createFramebuffer(),shadowDepth=gl.createRenderbuffer();gl
 function hidden(p,eye){if(p.wall==='scan')return autoWalls&&dot(p.cutawayNormal,sub(eye,p.cutawayCenter))>0;return(p.wall==='roof'&&!showRoof)||(autoWalls&&p.wall&&((p.wall==='front'&&eye[2]>0)||(p.wall==='back'&&eye[2]<0)||(p.wall==='left'&&eye[0]<0)||(p.wall==='right'&&eye[0]>0)))}
 function shadowDraw(objects,m,eye){gl.uniformMatrix4fv(sud,false,m);for(let p of objects){if(hidden(p,eye)||p.materialKind===4)continue;gl.disable(gl.CULL_FACE);gl.bindBuffer(gl.ARRAY_BUFFER,p.v);gl.enableVertexAttribArray(sap);gl.vertexAttribPointer(sap,3,gl.FLOAT,false,0,0);gl.drawArrays(gl.TRIANGLES,0,p.count)}}
 function render(){if(dirty){dirty=false;let eye=camera();gl.bindFramebuffer(gl.FRAMEBUFFER,shadowBuffer);gl.viewport(0,0,2048,2048);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(shadowProgram);gl.disableVertexAttribArray(an);gl.disableVertexAttribArray(at);gl.uniformMatrix4fv(sul,false,lightMatrix);shadowDraw(roomObjects,identity,eye);for(let i of items)shadowDraw(assetMap.get(i.assetId).objects,model(i),eye);
-gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,sceneTarget)));draw(roomObjects,identity,eye);for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected);drawAxisGizmo(eye);positionLabels()}requestAnimationFrame(render)}
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,shadowTexture);gl.uniform1i(us,0);gl.uniform3fv(ue,eye);gl.uniformMatrix4fv(ul,false,lightMatrix);gl.uniformMatrix4fv(um,false,mul(perspective(.73,canvas.width/canvas.height,.1,100),look(eye,sceneTarget)));draw(roomObjects,identity,eye);for(let i of items)draw(assetMap.get(i.assetId).objects,model(i),eye,i.instanceId===selected,overlapIDs.has(i.instanceId));drawAxisGizmo(eye);updateDimensions()}requestAnimationFrame(render)}
 // Scanned-room adapter. Raw RoomPlan geometry stays immutable; editor items carry changes.
 let scannedSource=null;
 let activeRoomParts=room.parts;
 let sceneTarget=[0,.95,0];
 const rotationHUD=document.getElementById('rotationHUD');
 function updateRotationHUD(){if(rotationHUD)rotationHUD.hidden=!(furnitureMoveEnabled&&chosen())}
-const rotateStep=degrees=>{if(!furnitureMoveEnabled||!chosen())return;dragging=null;showAxis(null);rotate(degrees)};
+const rotateStep=degrees=>{if(!furnitureMoveEnabled||!chosen())return;dragging=null;showAxis(null);rotate(degrees);commitLayout()};
 if(rotationHUD){document.getElementById('rotateLeft').onclick=()=>rotateStep(-15);document.getElementById('rotateRight').onclick=()=>rotateStep(15)}
 function matrixPoint(m,p){return[0,1,2].map(k=>m[k]*p[0]+m[4+k]*p[1]+m[8+k]*p[2]+m[12+k])}
 function inversePlanePoint(m,p){const q=sub(p,m.slice(12,15));return[dot(q,m.slice(0,3)),dot(q,m.slice(4,7)),dot(q,m.slice(8,11))]}
@@ -264,38 +367,12 @@ function loadScannedRoom(doc){
 }
 function restoreDemoGeometry(){if(scannedSource){clearScannedAssets();setRoomGeometry(room.parts);sceneTarget=[0,.95,0];scannedSource=null}}
 
-// Native product bridge and small in-room furniture controls.
-let bridgeActive=false,showNames=true;
-const textureCache=new Map(),labelNodes=new Map();
-const style=document.createElement('style');style.textContent=`
-#furnitureTools{position:absolute;top:4px;left:6px;right:6px;display:flex;justify-content:space-between;gap:6px;z-index:20;pointer-events:none}
-#furnitureTools>*{pointer-events:auto;font:11px -apple-system,sans-serif;background:#fffffff0;border:1px solid #e5ded5;border-radius:12px;padding:5px 8px;max-width:68%}
-#selectedFurniture{position:absolute;bottom:5px;left:6px;right:6px;background:#fffffff2;border:1px solid #e5ded5;border-radius:14px;padding:6px;display:flex;align-items:center;gap:4px;z-index:20;box-shadow:0 2px 10px #392d2510}
-#selectedFurniture[hidden]{display:none}#selectedFurniture input{min-width:0;flex:1;border:0;background:transparent;font:12px -apple-system,sans-serif;padding:4px}
-#selectedFurniture button{font:12px -apple-system,sans-serif;padding:5px 8px;border:0;border-radius:9px;background:#f4f0ea;min-height:28px}#selectedFurniture .remove{color:#b7382c}
-#furnitureLabels{position:absolute;inset:0;pointer-events:none;z-index:12}.furnitureLabel{position:absolute;max-width:145px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transform:translate(-50%,-50%);border:1px solid #e3dbd1;border-radius:8px;padding:3px 6px;background:#ffffffe8;color:#4a352b;font:10px -apple-system,sans-serif;pointer-events:auto;min-width:0}.furnitureLabel.selected{background:#4a352b;color:white;border-color:#4a352b}
-#axisIndicator{bottom:51px}#rotationHUD{display:none!important}
-`;document.head.append(style);
-const tools=document.createElement('div');tools.id='furnitureTools';
-const picker=document.createElement('select');picker.setAttribute('aria-label','Select furniture');picker.onchange=()=>selectFurniture(picker.value||null);
-const nameToggle=document.createElement('button');nameToggle.textContent='Names on';nameToggle.onclick=()=>{showNames=!showNames;nameToggle.textContent=showNames?'Names on':'Names off';dirty=true};tools.append(picker,nameToggle);document.body.append(tools);
-const toolbar=document.createElement('div');toolbar.id='selectedFurniture';toolbar.hidden=true;
-const nameInput=document.createElement('input');nameInput.maxLength=80;nameInput.setAttribute('aria-label','Furniture name');nameInput.placeholder='Furniture name';nameInput.onchange=()=>renameSelected(nameInput.value);nameInput.onkeydown=e=>{if(e.key==='Enter')nameInput.blur()};
-const turnLeft=document.createElement('button');turnLeft.textContent='↶';turnLeft.setAttribute('aria-label','Rotate furniture left');turnLeft.onclick=()=>{rotate(-15);commitLayout()};
-const turnRight=document.createElement('button');turnRight.textContent='↷';turnRight.setAttribute('aria-label','Rotate furniture right');turnRight.onclick=()=>{rotate(15);commitLayout()};
-const removeButton=document.createElement('button');removeButton.textContent='Remove';removeButton.className='remove';removeButton.onclick=()=>removeSelected();toolbar.append(nameInput,turnLeft,turnRight,removeButton);document.body.append(toolbar);
-const labels=document.createElement('div');labels.id='furnitureLabels';document.body.append(labels);
+// Native product bridge. Furniture labels and the replacement edit toolbar are intentionally absent.
+let bridgeActive=false;
+const textureCache=new Map();
 function itemName(i){const raw=scannedSource?.objects.find(e=>'scan-'+e.id===i.assetId);return i.label||raw?.label||assetMap.get(i.assetId)?.label||'Furniture'}
-function updateFurnitureUI(){
- const active=document.activeElement===picker;picker.replaceChildren(new Option('Select furniture…',''));
- for(const item of items)picker.add(new Option(itemName(item),item.instanceId));picker.value=selected||'';
- const i=chosen();toolbar.hidden=!i;if(i&&document.activeElement!==nameInput)nameInput.value=itemName(i);
- const live=new Set(items.map(i=>i.instanceId));for(const[id,node]of labelNodes)if(!live.has(id)){node.remove();labelNodes.delete(id)}
- for(const item of items){let node=labelNodes.get(item.instanceId);if(!node){node=document.createElement('button');node.className='furnitureLabel';node.onclick=()=>selectFurniture(item.instanceId);labels.append(node);labelNodes.set(item.instanceId,node)}node.textContent=itemName(item);node.classList.toggle('selected',item.instanceId===selected)}
-}
-function positionLabels(){for(const item of items){const node=labelNodes.get(item.instanceId),p=project(boundsCenter(item));if(!node)continue;const visible=showNames&&p&&p[0]>0&&p[0]<innerWidth&&p[1]>37&&p[1]<innerHeight-(chosen()?52:8);node.hidden=!visible;if(visible){node.style.left=p[0]+'px';node.style.top=p[1]+'px'}}}
 function selectFurniture(id){if(id&&!furnitureMoveEnabled)setFurnitureMoveEnabled(true);selected=id&&items.some(i=>i.instanceId===id)?id:null;showAxis(null);sync();commitLayout()}
-function renameSelected(value){const i=chosen();if(!i)return;const name=Array.from(String(value).trim()).slice(0,80).join('');if(!name){nameInput.value=itemName(i);return}i.label=name;sync();commitLayout()}
+function renameSelected(value){const i=chosen();if(!i)return;const name=Array.from(String(value).trim()).slice(0,80).join('');if(!name)return;i.label=name;sync();commitLayout()}
 function removeSelected(){if(!chosen())return;items=items.filter(i=>i.instanceId!==selected);selected=null;showAxis(null);sync();commitLayout()}
 function post(type,extra={}){window.webkit?.messageHandlers?.furniture?.postMessage({type,furnitureMoveEnabled,...extra})}
 function commitLayout(){if(bridgeActive)post('layout',{layout:layout()})}
@@ -341,7 +418,7 @@ function chatContext(){
  })):room.parts.map((p,k)=>chatGeometry('sample-structure-'+k,'structure',null,null,[p],identityPose));
  return{roomID:'editor',roomName:'Room',revision:'pending',source:scannedSource?'scan_editor':'sample_editor',units:'meters',coordinateSystem:'right-handed-y-up',selectedObjectID:selected||null,objects,structures};
 }
-window.tuckEditor={chatContext,add,layout,loadLayout,loadScannedRoom,rotateSelected:rotateStep,setFurnitureMoveEnabled,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
+window.tuckEditor={resetViewState,dimensionSegments,dimensionMarkup,furnitureBox,boxesOverlap,snapToStructure,snapSurfaces,overlapState:()=>[...overlapIDs],chatContext,add,layout,loadLayout,loadScannedRoom,rotateSelected:rotateStep,setFurnitureMoveEnabled,select:id=>{selected=id;showAxis(null);sync()},setTransform:(id,position,yawRadians)=>{let i=items.find(i=>i.instanceId===id);if(!i||!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite)||!Number.isFinite(yawRadians))throw Error('Invalid transform');i.position=[...position];i.yawRadians=yawRadians;sync()},assets,room,pick,ray,world,model,
 project,boundsCenter,screenAxis,inferAxis,axisParameter,gizmoTransform,furnitureAxisLengths,
 interactionState:()=>({sourceRoomID:scannedSource?.id??null,furnitureMoveEnabled,selected,axis:activeAxis,direction:activeDirection,dragging:dragging?{id:dragging.id,axis:dragging.axis}:null,camera:{yaw,pitch,radius}}),
 setCamera:(y,p,r)=>{yaw=y;pitch=p;radius=r;showAxis(null);dirty=true}};

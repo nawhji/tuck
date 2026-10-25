@@ -103,7 +103,7 @@ final class RoomPreviewController: ObservableObject {
     @discardableResult
     func toggleProduct(_ product: Product) async throws -> Bool? {
         guard FurnitureCatalog.supports(product.id) else { throw FurnitureError.missingModel(product.id) }
-        guard isReady, let view = webView else { throw RoomLibraryError.previewNotReady }
+        guard isReady, !isRestoring, let view = webView else { throw RoomLibraryError.previewNotReady }
         guard !loadingProductIDs.contains(product.id) else { return nil }
         let token = generation, removing = placedProductIDs.contains(product.id)
         loadingProductIDs.insert(product.id)
@@ -144,16 +144,25 @@ final class RoomPreviewController: ObservableObject {
         }
     }
     func resetRoom() {
-        guard isReady, loadingProductIDs.isEmpty, let view = webView else { return }
         let token = generation
         Task {
-            do {
-                let result = try await command("reset", payload: NSNull(), in: view)
-                try check(view, token)
-                accept(try decode(result))
-            } catch is CancellationError {}
+            do { try await resetToSavedState() }
+            catch is CancellationError {}
             catch { if generation == token { errorMessage = error.localizedDescription } }
         }
+    }
+    func resetToSavedState() async throws {
+        guard isReady, !isRestoring, loadingProductIDs.isEmpty, let view = webView else {
+            throw RoomLibraryError.previewNotReady
+        }
+        let token = generation
+        isRestoring = true
+        defer { if generation == token { isRestoring = false } }
+        try await discardChanges()
+        try check(view, token)
+        _ = try await view.callAsyncJavaScript("window.tuckEditor.resetViewState(); return true;",
+            arguments: [:], in: nil, contentWorld: .page)
+        try check(view, token)
     }
     private func decode(_ value: Any) throws -> RoomLayoutSnapshot {
         let layout = try JSONDecoder().decode(RoomLayoutSnapshot.self, from: JSONSerialization.data(withJSONObject: value))

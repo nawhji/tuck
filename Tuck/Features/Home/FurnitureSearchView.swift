@@ -33,12 +33,12 @@ struct FurnitureSearchView: View {
                     ForEach(products) { product in
                         ProductCardView(product: product, isSelected: room.placedProductIDs.contains(product.id),
                             onToggle: { onTry(product) }, isLoading: room.loadingProductIDs.contains(product.id),
-                            canTry: room.isReady)
+                            canTry: room.isReady && !room.isRestoring)
                     }
                     Text("Drag furniture to move it. Tap a name to select it, rename it, rotate it, or remove it.")
                         .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24)
                     Button("Reset current room", role: .destructive) { confirmsReset = true }
-                        .disabled(!room.isReady || !room.loadingProductIDs.isEmpty)
+                        .disabled(!room.isReady || room.isRestoring || !room.loadingProductIDs.isEmpty)
                         .font(.caption).padding(.horizontal, 24).padding(.vertical, 12)
                 }
                 .padding(.vertical, 16)
@@ -59,7 +59,7 @@ struct FurnitureSearchView: View {
             .confirmationDialog("Reset furniture in this room?", isPresented: $confirmsReset, titleVisibility: .visible) {
                 Button("Reset room", role: .destructive) { room.resetRoom() }
                 Button("Cancel", role: .cancel) {}
-            } message: { Text("This resets furniture positions, names, and removals, including chairs you tried.") }
+            } message: { Text("This restores the last saved furniture layout and names, including additions and removals.") }
         }
     }
 }
