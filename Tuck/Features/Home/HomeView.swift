@@ -1,6 +1,5 @@
 import SwiftUI
 
-@MainActor
 struct HomeView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var model: HomeViewModel
@@ -10,6 +9,7 @@ struct HomeView: View {
     @GestureState private var dragOffset: CGFloat = 0
     @FocusState private var isInputFocused: Bool
     @State private var moveEnabled = false
+    @State private var inchesEnabled = false
     @State private var moveNotice: String?
     @State private var noticeTask: Task<Void, Never>?
     @State private var showLeaveDialog = false
@@ -20,6 +20,7 @@ struct HomeView: View {
     @State private var saveError: String?
     @State private var isSavingRoom = false
     @State private var isLoadingRooms = false
+    @State private var isResettingRoom = false
     @State private var showsRoomLibrary = false
     @State private var queuedRoomSelection: RoomLibraryEntry?
     @State private var roomAfterLeaving: RoomLibraryEntry?
@@ -27,8 +28,8 @@ struct HomeView: View {
     @State private var leaveAfterPickerDismiss = false
     @State private var deferredSaveError: String?
 
-    init(model: HomeViewModel? = nil) {
-        _model = State(initialValue: model ?? HomeViewModel())
+    init(model: HomeViewModel = HomeViewModel()) {
+        _model = State(initialValue: model)
     }
 
     var body: some View {
@@ -64,9 +65,6 @@ struct HomeView: View {
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
-        .onReceive(preview.$moveEnabled) { enabled in
-            if moveEnabled != enabled { moveEnabled = enabled }
-        }
         .sheet(isPresented: $showExistingRooms, onDismiss: existingRoomPickerDismissed) {
             existingRoomPicker.interactiveDismissDisabled(isSavingRoom)
         }
@@ -94,11 +92,11 @@ struct HomeView: View {
         } message: { Text("Give your room a name.") }
         .alert("Tuck", isPresented: Binding(
             get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms && !showsRoomLibrary &&
-                (saveError != nil || model.scanLoadError != nil || model.chatStorageError != nil || favorites.errorMessage != nil || preview.errorMessage != nil) },
-            set: { if !$0 { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil; preview.errorMessage = nil } }
+                (saveError != nil || model.scanLoadError != nil || model.chatStorageError != nil || favorites.errorMessage != nil) },
+            set: { if !$0 { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil } }
         )) {
-            Button("OK", role: .cancel) { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil; preview.errorMessage = nil }
-        } message: { Text(saveError ?? model.scanLoadError ?? model.chatStorageError ?? favorites.errorMessage ?? preview.errorMessage ?? "") }
+            Button("OK", role: .cancel) { saveError = nil; model.scanLoadError = nil; model.chatStorageError = nil; favorites.errorMessage = nil }
+        } message: { Text(saveError ?? model.scanLoadError ?? model.chatStorageError ?? favorites.errorMessage ?? "") }
         .fullScreenCover(isPresented: $model.isPresentingScan) {
             DemoScanView(
                 onFinish: { scan in
@@ -117,11 +115,7 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { model.persistChat() }
         }
-        .onChange(of: preview.placedProductIDs) { _, ids in
-            if model.selectedProductID.map({ ids.contains($0) }) != true {
-                model.selectedProductID = ids.sorted().first
-            }
-        }
+        .onChange(of: model.sceneID) { _, _ in inchesEnabled = false }
         .onDisappear { noticeTask?.cancel(); model.persistChat() }
     }
 
@@ -139,23 +133,27 @@ struct HomeView: View {
         let top = CGFloat(model.hasScannedSpace ? 84 : 55) * (1 - expansion) - geometry.safeAreaInsets.top * expansion
         let bottom = (geometry.size.height - sheetHeight - 54) * (1 - expansion) + (geometry.size.height + geometry.safeAreaInsets.bottom) * expansion
         let viewport = CGSize(width: geometry.size.width, height: max(160, bottom - top))
+        let toolsVisible = !isInputFocused && sheetHeight <= collapsed + 16
+        let dimensionsBottom = geometry.size.height - sheetHeight - (toolsVisible ? 66 : 12)
+        let dimensionInsets = EdgeInsets(top: max(12, 64 - top), leading: 12,
+                                        bottom: max(model.savedScan == nil ? 12 : 44, top + viewport.height - dimensionsBottom), trailing: 12)
         return ZStack(alignment: .topLeading) {
             RoomStageView(hasScannedSpace: model.hasScannedSpace,
                           onScanTap: requestScan,
                           onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true },
                           viewportSize: viewport,
                           previewController: preview,
-                          moveEnabled: moveEnabled,
+                          moveEnabled: moveEnabled, inchesEnabled: inchesEnabled, dimensionInsets: dimensionInsets,
                           initialLayout: model.activeLayout,
                           scannedRoom: model.activeLayout == nil ? model.savedScan?.document : model.activeLayout?.scannedRoom)
                 .id(model.sceneID)
-                .allowsHitTesting(!isLoadingRooms && !isSavingRoom)
+                .allowsHitTesting(!isLoadingRooms && !isSavingRoom && !isResettingRoom)
                 .frame(width: viewport.width, height: viewport.height)
                 .position(x: geometry.size.width / 2, y: top + viewport.height / 2)
             HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile,
                        roomName: model.roomDisplayName, onRoomsTap: openRoomLibrary,
-                       roomsEnabled: !isLoadingRooms && !isSavingRoom)
-                .disabled(isLoadingRooms || isSavingRoom)
+                       roomsEnabled: !isLoadingRooms && !isSavingRoom && !isResettingRoom)
+                .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
                 .padding(.top, 8)
 
         }
@@ -179,19 +177,21 @@ struct HomeView: View {
                         .allowsHitTesting(false)
                 }
                 HStack(spacing: 10) {
-                    if model.hasScannedSpace { moveButton }
+                    if model.hasScannedSpace {
+                        resetButton
+                        inchButton
+                        moveButton
+                    }
                     cameraButton
                 }
             }
             .padding(.trailing, 16).padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .trailing)
             .opacity(toolsVisible ? 1 : 0)
-            .allowsHitTesting(toolsVisible)
+            .allowsHitTesting(toolsVisible && !isResettingRoom)
             ChatSheet(
                 messages: model.messages,
-                placedProductIDs: preview.placedProductIDs, loadingProductIDs: preview.loadingProductIDs,
-                canTryFurniture: preview.isReady && !isLoadingRooms && !isSavingRoom,
-                draft: $model.draft,
+                selectedProductID: model.selectedProductID, placedProductIDs: preview.placedProductIDs, draft: $model.draft,
                 isInputFocused: $isInputFocused, canSend: model.canSend,
                 dragGesture: sheetDrag(availableHeight: geometry.size.height),
                 onSend: {
@@ -210,20 +210,56 @@ struct HomeView: View {
     }
 
     private func tryFurniture(_ product: Product) {
-        guard model.hasScannedSpace, !isLoadingRooms, !isSavingRoom else { return }
-        guard FurnitureCatalog.supports(product.id) else {
-            preview.errorMessage = "This chair’s 3D preview is coming soon."
-            return
-        }
-        isInputFocused = false
-        Task {
+        guard !isResettingRoom else { return }
+        let scene = model.sceneID
+        Task { @MainActor in
             do {
-                guard let added = try await preview.toggleProduct(product) else { return }
+                guard let added = try await preview.toggleProduct(product.id), model.sceneID == scene else { return }
                 if added { model.selectedProductID = product.id }
-                if added { moveEnabled = true }
-                withAnimation(.spring(duration: 0.35)) { model.sheetDetent = .minimized }
-            } catch is CancellationError {}
-            catch { preview.errorMessage = "Couldn't display \(product.name): \(error.localizedDescription)" }
+                else if model.selectedProductID == product.id { model.selectedProductID = nil }
+            } catch is CancellationError {
+            } catch {
+                if model.sceneID == scene { saveError = error.localizedDescription }
+            }
+        }
+    }
+
+    private var inchButton: some View {
+        Button { inchesEnabled.toggle() } label: {
+            Text("inch")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 15).frame(height: 42)
+                .background(inchesEnabled ? Color("TuckBrown") : Color(.systemGray3), in: Capsule())
+        }
+        .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
+        .accessibilityLabel("Furniture dimensions in inches")
+        .accessibilityValue(inchesEnabled ? "On" : "Off")
+    }
+
+    private var resetButton: some View {
+        Button("Reset", action: resetRoom)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color("TuckBrown"))
+            .padding(.horizontal, 14).frame(height: 42)
+            .background(.white, in: Capsule())
+            .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 1))
+            .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
+            .accessibilityLabel("Restore last saved furniture layout")
+    }
+
+    private func resetRoom() {
+        guard !isResettingRoom, !isLoadingRooms, !isSavingRoom else { return }
+        isResettingRoom = true
+        Task { @MainActor in
+            defer { isResettingRoom = false }
+            do {
+                try await preview.resetToSavedState()
+                resetEditorInteraction()
+                model.selectedProductID = nil
+                model.isSimulating = false
+            } catch is CancellationError {
+            } catch { saveError = error.localizedDescription }
         }
     }
 
@@ -234,7 +270,7 @@ struct HomeView: View {
                 .frame(width: 42, height: 42)
                 .background(Color(.systemGray3), in: Circle())
         }
-        .disabled(isLoadingRooms || isSavingRoom)
+        .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
         .accessibilityLabel("Scan space")
     }
 
@@ -257,7 +293,7 @@ struct HomeView: View {
                     }
                 }
         }
-        .disabled(isLoadingRooms || isSavingRoom)
+        .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
         .accessibilityLabel("Furniture move mode")
         .accessibilityValue(moveEnabled ? "On" : "Off")
     }

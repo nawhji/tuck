@@ -1,29 +1,54 @@
 import Foundation
 import SceneKit
+import SceneKit.ModelIO
 import ModelIO
 import UIKit
 import simd
 
-/// Loads verified, offline material payloads for the three supplied demo chairs.
-/// Their original USDZ files remain available for Quick Look. The prepared path
-/// avoids SceneKit/Model I/O texture reinterpretation and all old disk caches.
+/// Reads the actual bundled USDZ once, off the main actor, and caches a small
+/// textured triangle payload for the existing offline WebGL room.
 actor FurnitureModelLibrary {
     static let shared = FurnitureModelLibrary()
+    nonisolated static let modelIDs = ["sofa_007_brown", "sofa_027_brown", "sofa_028_brown"]
+    nonisolated static func supports(_ id: String) -> Bool { modelIDs.contains(id) }
+    private var memory: [String: Data] = [:]
 
     func payload(for id: String) throws -> Data {
-        guard FurnitureCatalog.supports(id),
-              let url = Bundle.main.url(forResource: id, withExtension: "tuckmodel",
-                                        subdirectory: "ChairMaterials") else {
-            throw FurnitureError.missingModel(id)
+        guard Self.supports(id),
+              let url = Bundle.main.url(forResource: id, withExtension: "usdz") else {
+            throw FurniturePlacementError.missingModel(id)
         }
-        let data = try Data(contentsOf: url)
-        let model = try JSONDecoder().decode(ModelPayload.self, from: data)
-        guard model.id == id, model.appearanceVersion == 1, !model.parts.isEmpty,
-              model.parts.allSatisfy({ $0.indices != nil && $0.tangents != nil &&
-                  $0.texture != nil && $0.normalTexture != nil &&
-                  $0.roughnessTexture != nil && $0.metallicTexture != nil }) else {
-            throw FurnitureError.unsupportedGeometry
+        if let cached = memory[id] { return cached }
+        let size = (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("FurnitureModels-v2", isDirectory: true)
+        let cache = directory.appendingPathComponent("\(id)-\(build)-\(size).json")
+        if let data = try? Data(contentsOf: cache),
+           (try? JSONDecoder().decode(ModelPayload.self, from: data)) != nil {
+            memory[id] = data
+            return data
         }
+        let data = try autoreleasepool {
+            let scene: SCNScene
+            do {
+                scene = try SCNScene(url: url, options: [.convertToYUp: true])
+            } catch {
+                let asset = MDLAsset(url: url)
+                asset.loadTextures()
+                scene = SCNScene(mdlAsset: asset)
+            }
+            let catalog = try ProductCatalog()
+            guard let row = catalog.row(id: id) else { throw FurniturePlacementError.missingModel(id) }
+            let dimensions = ["width_in", "height_in", "depth_in"].map {
+                (Double(row[$0] ?? "") ?? 32) * 0.0254
+            }
+            return try JSONEncoder().encode(Self.export(scene: scene, id: id,
+                label: row["name"] ?? id, target: dimensions))
+        }
+        memory[id] = data
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: cache, options: .atomic)
         return data
     }
 
@@ -32,7 +57,6 @@ actor FurnitureModelLibrary {
         let label: String
         let parts: [Part]
         let bounds: [[Float]]
-        var appearanceVersion: Int? = nil
     }
 
     struct Part: Codable {
@@ -42,13 +66,6 @@ actor FurnitureModelLibrary {
         let color: [Float]
         let roughness: Float
         let texture: String?
-        let normalTexture: String?
-        let normalStrength: Float?
-        let roughnessTexture: String?
-        var indices: String? = nil
-        var tangents: String? = nil
-        var metallic: Float? = nil
-        var metallicTexture: String? = nil
     }
 
     /// Internal so the iOS test target can verify hierarchy, units and decoding
@@ -61,19 +78,9 @@ actor FurnitureModelLibrary {
             let color: [Float]
             let roughness: Float
             let texture: String?
-            let normalTexture: String?
-            let normalStrength: Float
-            let roughnessTexture: String?
         }
         var meshes: [Mesh] = []
         var textureCache: [ObjectIdentifier: String] = [:]
-        func map(_ property: SCNMaterialProperty) -> String? {
-            let key = ObjectIdentifier(property)
-            if let cached = textureCache[key] { return cached }
-            let image = textureData(property.contents)
-            if let image { textureCache[key] = image }
-            return image
-        }
         var low = SIMD3<Float>(repeating: .infinity), high = SIMD3<Float>(repeating: -.infinity)
         var failure: Error?
         scene.rootNode.enumerateHierarchy { node, _ in
@@ -92,19 +99,21 @@ actor FurnitureModelLibrary {
                 for (index, element) in geometry.elements.enumerated() {
                     let indices = try triangles(element)
                     let material = geometry.materials.isEmpty ? SCNMaterial() : geometry.materials[index % geometry.materials.count]
-                    let transformUV = SCNMatrix4ToMat4(material.diffuse.contentsTransform)
-                    let diffuse = colorComponents(material.diffuse.contents)
-                    let tint = colorComponents(material.multiply.contents)
-                    let color = zip(diffuse, tint).map { pair in pair.0 * pair.1 }
-                    let roughnessMap = map(material.roughness)
+                    let transformUV = simd_float4x4(material.diffuse.contentsTransform)
+                    let color = colorComponents(material.diffuse.contents)
+                    let key = ObjectIdentifier(material)
+                    let image: String?
+                    if let cached = textureCache[key] { image = cached }
+                    else {
+                        image = textureData(material.diffuse.contents)
+                        if let image { textureCache[key] = image }
+                    }
                     var mesh = Mesh(positions: [], normals: [], uvs: [], color: color,
-                        roughness: roughnessMap == nil ? scalar(material.roughness.contents, fallback: 0.72) : 1,
-                        texture: map(material.diffuse), normalTexture: map(material.normal),
-                        normalStrength: Float(material.normal.intensity), roughnessTexture: roughnessMap)
+                        roughness: (material.roughness.contents as? NSNumber)?.floatValue ?? 0.72, texture: image)
                     for face in stride(from: 0, to: indices.count, by: 3) {
                         let triple = Array(indices[face..<face + 3])
                         guard triple.allSatisfy({ $0 >= 0 && $0 < points.count }) else {
-                            throw FurnitureError.unsupportedGeometry
+                            throw FurniturePlacementError.unsupportedGeometry
                         }
                         let world = triple.map { i -> SIMD3<Float> in
                             let p = points[i]
@@ -114,7 +123,7 @@ actor FurnitureModelLibrary {
                         guard simd_length(crossProduct) > 1e-10 else { continue }
                         for (corner, i) in triple.enumerated() {
                             let p = world[corner]
-                            guard p.x.isFinite, p.y.isFinite, p.z.isFinite else { throw FurnitureError.unsupportedGeometry }
+                            guard p.x.isFinite, p.y.isFinite, p.z.isFinite else { throw FurniturePlacementError.unsupportedGeometry }
                             low = simd_min(low, p); high = simd_max(high, p)
                             mesh.positions.append(p)
                             if let normals, i < normals.count {
@@ -134,7 +143,7 @@ actor FurnitureModelLibrary {
         if let failure { throw failure }
         let size = high - low
         guard !meshes.isEmpty, target.count == 3, size.x > 1e-6, size.y > 1e-6, size.z > 1e-6 else {
-            throw FurnitureError.emptyModel
+            throw FurniturePlacementError.emptyModel
         }
         // Uniform scaling preserves the supplied chair's shape even when its
         // USDZ uses centimeters. Bottom-centering gives it a floor-level pivot.
@@ -147,9 +156,7 @@ actor FurnitureModelLibrary {
             }
             return Part(positions: packed(positions), normals: packed(mesh.normals.flatMap { [$0.x, $0.y, $0.z] }),
                 uvs: packed(mesh.uvs.flatMap { [$0.x, $0.y] }), color: mesh.color,
-                roughness: min(1, max(0.05, mesh.roughness)), texture: mesh.texture,
-                normalTexture: mesh.normalTexture, normalStrength: mesh.normalStrength,
-                roughnessTexture: mesh.roughnessTexture)
+                roughness: min(1, max(0.05, mesh.roughness)), texture: mesh.texture)
         }
         let halfX = size.x * scale / 2, halfZ = size.z * scale / 2
         return ModelPayload(id: id, label: label, parts: parts,
@@ -162,14 +169,14 @@ actor FurnitureModelLibrary {
 
     private static func vectors(_ source: SCNGeometrySource, count: Int) throws -> [[Float]] {
         guard source.usesFloatComponents, [2, 4, 8].contains(source.bytesPerComponent),
-              source.componentsPerVector >= count else { throw FurnitureError.unsupportedGeometry }
+              source.componentsPerVector >= count else { throw FurniturePlacementError.unsupportedGeometry }
         let stride = source.dataStride > 0 ? source.dataStride : source.componentsPerVector * source.bytesPerComponent
         return try source.data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in
             try (0..<source.vectorCount).map { vector in
                 try (0..<count).map { component in
                     let offset = source.dataOffset + vector * stride + component * source.bytesPerComponent
                     guard offset >= 0, offset + source.bytesPerComponent <= bytes.count else {
-                        throw FurnitureError.unsupportedGeometry
+                        throw FurniturePlacementError.unsupportedGeometry
                     }
                     let value: Float
                     switch source.bytesPerComponent {
@@ -177,7 +184,7 @@ actor FurnitureModelLibrary {
                     case 4: value = bytes.loadUnaligned(fromByteOffset: offset, as: Float.self)
                     default: value = Float(bytes.loadUnaligned(fromByteOffset: offset, as: Double.self))
                     }
-                    guard value.isFinite else { throw FurnitureError.unsupportedGeometry }
+                    guard value.isFinite else { throw FurniturePlacementError.unsupportedGeometry }
                     return value
                 }
             }
@@ -185,7 +192,7 @@ actor FurnitureModelLibrary {
     }
 
     private static func triangles(_ element: SCNGeometryElement) throws -> [Int] {
-        guard [1, 2, 4].contains(element.bytesPerIndex) else { throw FurnitureError.unsupportedGeometry }
+        guard [1, 2, 4].contains(element.bytesPerIndex) else { throw FurniturePlacementError.unsupportedGeometry }
         let indices: [Int] = element.data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in
             stride(from: 0, through: max(-1, bytes.count - element.bytesPerIndex), by: element.bytesPerIndex).map { offset in
                 switch element.bytesPerIndex {
@@ -197,10 +204,10 @@ actor FurnitureModelLibrary {
         }
         switch element.primitiveType {
         case .triangles:
-            guard indices.count >= element.primitiveCount * 3 else { throw FurnitureError.unsupportedGeometry }
+            guard indices.count >= element.primitiveCount * 3 else { throw FurniturePlacementError.unsupportedGeometry }
             return Array(indices.prefix(element.primitiveCount * 3))
         case .triangleStrip:
-            guard indices.count >= element.primitiveCount + 2 else { throw FurnitureError.unsupportedGeometry }
+            guard indices.count >= element.primitiveCount + 2 else { throw FurniturePlacementError.unsupportedGeometry }
             return (0..<element.primitiveCount).flatMap { i in
                 i.isMultiple(of: 2) ? [indices[i], indices[i + 1], indices[i + 2]] : [indices[i + 1], indices[i], indices[i + 2]]
             }
@@ -208,57 +215,44 @@ actor FurnitureModelLibrary {
             let counts = Array(indices.prefix(element.primitiveCount))
             var cursor = element.primitiveCount, result: [Int] = []
             for count in counts {
-                guard count >= 3, cursor + count <= indices.count else { throw FurnitureError.unsupportedGeometry }
+                guard count >= 3, cursor + count <= indices.count else { throw FurniturePlacementError.unsupportedGeometry }
                 for i in 1..<count - 1 { result += [indices[cursor], indices[cursor + i], indices[cursor + i + 1]] }
                 cursor += count
             }
             return result
-        default: throw FurnitureError.unsupportedGeometry
+        default: throw FurniturePlacementError.unsupportedGeometry
         }
     }
 
     private static func colorComponents(_ contents: Any?) -> [Float] {
-        let color: UIColor
-        if let value = contents as? UIColor { color = value }
-        else if let value = contents, CFGetTypeID(value as CFTypeRef) == CGColorGetTypeID() {
-            color = UIColor(cgColor: value as! CGColor)
-        } else { return [1, 1, 1] }
+        guard let color = contents as? UIColor else { return [1, 1, 1] }
         var r: CGFloat = 1, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
         color.getRed(&r, green: &g, blue: &b, alpha: &a)
         return [Float(r), Float(g), Float(b)]
     }
 
-    private static func scalar(_ contents: Any?, fallback: Float) -> Float {
-        if let number = contents as? NSNumber { return number.floatValue }
-        if contents is UIColor { return colorComponents(contents).reduce(0, +) / 3 }
-        return fallback
-    }
-
     private static func textureData(_ contents: Any?) -> String? {
         let image: UIImage?
         if let value = contents as? UIImage { image = value }
-        else if let value = contents as? Data { image = UIImage(data: value) }
         else if let value = contents as? URL, value.isFileURL { image = UIImage(contentsOfFile: value.path) }
         else if let value = contents as? String {
             image = UIImage(contentsOfFile: URL(string: value).flatMap { $0.isFileURL ? $0.path : nil } ?? value)
         }
         else if let value = contents as? MDLTexture { image = Self.image(from: value) }
         else if let value = contents, !(value is UIColor), !(value is NSNumber),
-                CFGetTypeID(value as CFTypeRef) == CGImageGetTypeID() {
+                CFGetTypeID(value as CFTypeRef) == CGImage.typeID {
             image = UIImage(cgImage: value as! CGImage)
         }
         else { image = nil }
         guard let image, image.size.width > 0, image.size.height > 0 else { return nil }
-        let pixels = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
-        let ratio = min(1, 2048 / max(pixels.width, pixels.height))
-        let size = CGSize(width: max(1, floor(pixels.width * ratio)), height: max(1, floor(pixels.height * ratio)))
+        let ratio = min(1, 1024 / max(image.size.width, image.size.height))
+        let size = CGSize(width: max(1, floor(image.size.width * ratio)), height: max(1, floor(image.size.height * ratio)))
         let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
             UIColor.white.setFill(); UIRectFill(CGRect(origin: .zero, size: size))
             image.draw(in: CGRect(origin: .zero, size: size))
         }
-        // Lossless color, normal and roughness maps retain leather/fabric detail.
-        return resized.pngData().map { "data:image/png;base64," + $0.base64EncodedString() }
+        return resized.jpegData(compressionQuality: 0.82).map { "data:image/jpeg;base64," + $0.base64EncodedString() }
     }
 
     private static func image(from texture: MDLTexture) -> UIImage? {
@@ -285,4 +279,16 @@ actor FurnitureModelLibrary {
 
 private extension SIMD4 where Scalar == Float {
     var xyz: SIMD3<Float> { SIMD3(x, y, z) }
+}
+
+
+enum FurniturePlacementError: LocalizedError {
+    case missingModel(String), unsupportedGeometry, emptyModel
+    var errorDescription: String? {
+        switch self {
+        case .missingModel: "This item does not have a linked 3D model yet."
+        case .unsupportedGeometry: "This furniture model could not be loaded."
+        case .emptyModel: "This model contains no visible furniture."
+        }
+    }
 }

@@ -1,15 +1,28 @@
 import Foundation
 import Security
 
+/// Older local Secrets files can omit checkout fields. Existing teammate fields take precedence.
+protocol TuckCheckoutConfigurationProviding {
+    static var backendURL: URL { get }
+    static var stripePublishableKey: String { get }
+}
+extension TuckCheckoutConfigurationProviding {
+    static var backendURL: URL { URL(string: "https://checkout-not-configured.invalid")! }
+    static var stripePublishableKey: String { "" }
+}
+extension Secrets: TuckCheckoutConfigurationProviding {}
+
 /// 주문 백엔드(`backend/`) 클라이언트. Stripe 비밀 키는 서버에만 있고, 앱은 기기 토큰으로만 호출한다.
 actor CheckoutClient {
     enum CheckoutError: LocalizedError {
         case server(code: String, message: String)
         case invalidResponse
+        case notConfigured
 
         var errorDescription: String? {
             switch self {
             case let .server(_, message): message
+            case .notConfigured: "Payments are not supported on this device."
             case .invalidResponse: "The order service sent an unexpected response."
             }
         }
@@ -73,6 +86,7 @@ actor CheckoutClient {
 
     private func send(_ method: String, _ path: String, body: [String: Any]? = nil, acceptedStatuses: Set<Int> = [200],
                       retryingAuth: Bool = true) async throws -> (data: Data, status: Int) {
+        guard baseURL.host != "checkout-not-configured.invalid" else { throw CheckoutError.notConfigured }
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = method
         request.timeoutInterval = 30

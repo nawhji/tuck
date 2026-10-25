@@ -8,6 +8,8 @@ struct RoomStageView: View {
     var viewportSize: CGSize? = nil
     var previewController: RoomPreviewController? = nil
     var moveEnabled = false
+    var inchesEnabled = false
+    var dimensionInsets = EdgeInsets()
     var initialLayout: RoomLayoutSnapshot? = nil
     var scannedRoom: RoomDocument? = nil
     @StateObject private var fallbackController = RoomPreviewController()
@@ -16,7 +18,7 @@ struct RoomStageView: View {
         if hasScannedSpace {
             ZStack(alignment: .bottom) {
                 DemoRoomPreview(controller: previewController ?? fallbackController,
-                                initialLayout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
+                                initialLayout: initialLayout, moveEnabled: moveEnabled, inchesEnabled: inchesEnabled, dimensionInsets: dimensionInsets, scannedRoom: scannedRoom)
                     .accessibilityLabel(moveEnabled ? "Room. Drag furniture to move along one axis." : "Room. Drag to rotate. Pinch to zoom.")
                 if let onViewScan {
                     Button("View measurements", action: onViewScan)
@@ -46,10 +48,11 @@ private struct DemoRoomPreview: View {
     let controller: RoomPreviewController
     let initialLayout: RoomLayoutSnapshot?
     let moveEnabled: Bool
+    let inchesEnabled: Bool
+    let dimensionInsets: EdgeInsets
     let scannedRoom: RoomDocument?
     @State private var failed = false
     @State private var isLoading = true
-    @State private var retryID = UUID()
 
     var body: some View {
         ZStack {
@@ -58,14 +61,11 @@ private struct DemoRoomPreview: View {
                     if scannedRoom == nil && initialLayout?.scannedRoom == nil { DemoRoomThumbnail() }
                     Text("3D preview unavailable on this device")
                         .font(.caption2).foregroundStyle(.secondary)
-                    Button("Retry room") { failed = false; isLoading = true; retryID = UUID() }
-                        .font(.caption)
                 }
             } else {
                 DemoRoomWebView(controller: controller, initialLayout: initialLayout,
-                                moveEnabled: moveEnabled, scannedRoom: scannedRoom,
+                                moveEnabled: moveEnabled, inchesEnabled: inchesEnabled, dimensionInsets: dimensionInsets, scannedRoom: scannedRoom,
                                 onReady: { isLoading = false }, onFailure: { failed = true })
-                    .id(retryID)
                     .opacity(isLoading ? 0 : 1)
                     .allowsHitTesting(!isLoading)
                 if isLoading { ProgressView("Loading room…") }
@@ -90,6 +90,8 @@ private struct DemoRoomWebView: UIViewRepresentable {
     let controller: RoomPreviewController
     let initialLayout: RoomLayoutSnapshot?
     let moveEnabled: Bool
+    let inchesEnabled: Bool
+    let dimensionInsets: EdgeInsets
     let scannedRoom: RoomDocument?
     let onReady: () -> Void
     let onFailure: () -> Void
@@ -99,7 +101,6 @@ private struct DemoRoomWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "previewError")
-        config.userContentController.add(context.coordinator, name: "furniture")
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.isOpaque = false
@@ -109,6 +110,7 @@ private struct DemoRoomWebView: UIViewRepresentable {
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.allowsLinkPreview = false
         controller.attach(view, layout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
+        controller.setDimensionOptions(enabled: inchesEnabled, insets: dimensionInsets)
         guard let url = Bundle.main.url(forResource: "DemoRoom", withExtension: "html") else {
             DispatchQueue.main.async(execute: onFailure)
             return view
@@ -119,17 +121,16 @@ private struct DemoRoomWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         controller.setMoveEnabled(moveEnabled)
+        controller.setDimensionOptions(enabled: inchesEnabled, insets: dimensionInsets)
     }
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
         coordinator.controller.detach(uiView)
         uiView.stopLoading()
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "previewError")
-        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "furniture")
         uiView.navigationDelegate = nil
     }
 
-    @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let controller: RoomPreviewController
         let onReady: () -> Void
@@ -142,16 +143,10 @@ private struct DemoRoomWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
                 do { try await controller.didLoad(webView); onReady() }
-                catch is CancellationError {}
                 catch { onFailure() }
             }
         }
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard message.frameInfo.isMainFrame else { return }
-            if message.name == "furniture", let view = message.webView {
-                controller.receive(message.body, from: view)
-            } else { onFailure() }
-        }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) { onFailure() }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { onFailure() }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { onFailure() }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { onFailure() }

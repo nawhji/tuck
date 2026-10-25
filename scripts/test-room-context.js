@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const html = fs.readFileSync('Tuck/Resources/DemoRoom.html', 'utf8') + fs.readFileSync('Tuck/Resources/DemoFurniture.js', 'utf8');
+const html = fs.readFileSync('Tuck/Resources/DemoRoom.html', 'utf8');
 function functionSource(name) {
   const start = html.indexOf('function ' + name + '(');
   assert(start >= 0, name);
@@ -14,7 +14,7 @@ function functionSource(name) {
 const box = {vertices: [[-1,-.5,-.25],[1,.5,.25]]};
 const assetMap = new Map([['scan-chair', {label:'Chair', parts:[box]}]]);
 const ctx = vm.createContext({assetMap, items:[{instanceId:'chair',assetId:'scan-chair',position:[3,.5,2],yawRadians:Math.PI/2}], selected:'chair', scannedSource:{id:'room',objects:[{id:'chair', category:'chair',label:'My chair',confidence:'high'}]}, room:{parts:[box]}, Math});
-vm.runInContext(['eachVertex','boundsOf','world','chatGeometry','chatContext'].map(functionSource).join('\n'), ctx);
+vm.runInContext(['boundsOf','world','chatGeometry','chatContext'].map(functionSource).join('\n'), ctx);
 const get = () => JSON.parse(vm.runInContext('JSON.stringify(chatContext())',ctx));
 let result = get(), item = result.objects[0];
 assert.equal(item.label,'My chair');

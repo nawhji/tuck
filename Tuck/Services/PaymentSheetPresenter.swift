@@ -1,4 +1,6 @@
+#if canImport(StripePaymentSheet) && !TUCK_NO_PAYMENTS
 import StripePaymentSheet
+#endif
 import UIKit
 
 /// Stripe PaymentSheet를 현재 화면 위에 모달로 띄운다. 카드 입력·3DS 인증은 Stripe가 처리하고,
@@ -14,9 +16,29 @@ enum PaymentSheetPresenter {
     /// 테스트 모드 결제 완료 후 3DS 등 외부 인증에서 앱으로 돌아오는 주소.
     static let returnURL = "tuck://stripe-redirect"
 
+    static let unsupportedMessage = "Payments are not supported on this device."
+
+    static var isSupported: Bool {
+        #if canImport(StripePaymentSheet) && !TUCK_NO_PAYMENTS
+        return Secrets.stripePublishableKey.hasPrefix("pk_") && Secrets.backendURL.host != "checkout-not-configured.invalid"
+        #else
+        return false
+        #endif
+    }
+
+    static func handleURLCallback(_ url: URL) -> Bool {
+        #if canImport(StripePaymentSheet) && !TUCK_NO_PAYMENTS
+        return StripeAPI.handleURLCallback(with: url)
+        #else
+        return false
+        #endif
+    }
+
+    #if canImport(StripePaymentSheet) && !TUCK_NO_PAYMENTS
     private static var sheet: PaymentSheet?
 
     static func present(_ params: PaymentParams) async -> Outcome {
+        guard isSupported else { return .failed(unsupportedMessage) }
         StripeAPI.defaultPublishableKey = Secrets.stripePublishableKey
         var configuration = PaymentSheet.Configuration()
         configuration.merchantDisplayName = "Tuck (TEST MODE)"
@@ -46,4 +68,8 @@ enum PaymentSheetPresenter {
         while let presented = top?.presentedViewController { top = presented }
         return top
     }
+    #else
+    static func present(_ params: PaymentParams) async -> Outcome { .failed(unsupportedMessage) }
+    #endif
+
 }

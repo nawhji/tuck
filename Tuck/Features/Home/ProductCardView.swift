@@ -6,8 +6,6 @@ struct ProductCardView: View {
     let product: Product
     let isSelected: Bool
     var onToggle: (() -> Void)? = nil
-    var isLoading = false
-    var canTry = true
     @Environment(FavoritesStore.self) private var favorites
     private var isLiked: Bool { favorites.contains(product.id) }
 
@@ -47,7 +45,7 @@ struct ProductCardView: View {
 
     private func tryButton(_ onToggle: @escaping () -> Void) -> some View {
         Button(action: onToggle) {
-            Text(isLoading ? "Loading…" : isSelected ? "Remove" : "Try")
+            Text(isSelected ? "Remove" : "Try")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 18)
@@ -55,8 +53,6 @@ struct ProductCardView: View {
                 .background(isSelected ? Color("GrayScale300") : Color("TuckBrown"), in: .capsule)
         }
         .buttonStyle(.plain)
-        .disabled(isLoading || !canTry)
-        .accessibilityLabel(isLoading ? "Loading \(product.name)" : isSelected ? "Remove \(product.name) from room" : "Try \(product.name) in room")
     }
 
     private var likeButton: some View {

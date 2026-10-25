@@ -10,6 +10,10 @@ extension HomeViewModel {
     @MainActor
     func startCheckout(for placedID: Product.ID?, intent: BuyIntent, attachingTo messageID: ChatMessage.ID) async {
         guard !Task.isCancelled else { return }
+        guard PaymentSheetPresenter.isSupported else {
+            attach([.text(PaymentSheetPresenter.unsupportedMessage)], to: messageID)
+            return
+        }
         let requested = intent.productID.flatMap { id in catalog?.row(id: id) != nil ? id : nil }
         guard let productID = requested ?? placedID else {
             attach([.text("I'm not sure which piece you mean. Tell me which one, or describe what you want, and I'll order it.")], to: messageID)
@@ -79,6 +83,10 @@ extension HomeViewModel {
     @MainActor
     func placeOrder(_ tapped: CheckoutCard) {
         guard let card = card(orderID: tapped.orderID) else { return }
+        guard PaymentSheetPresenter.isSupported else {
+            fail(orderID: card.orderID, message: PaymentSheetPresenter.unsupportedMessage)
+            return
+        }
         switch card.state {
         case .ready, .failed:
             update(orderID: card.orderID) { $0.state = .processing; $0.notice = nil }

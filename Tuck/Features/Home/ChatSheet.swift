@@ -3,9 +3,8 @@ import SwiftUI
 /// 하단 채팅 시트: 핸들 + 제목 + 메시지 목록 + 입력창. 높이 조절(드래그)은 부모가 담당한다.
 struct ChatSheet<Drag: Gesture>: View {
     let messages: [ChatMessage]
-    let placedProductIDs: Set<String>
-    let loadingProductIDs: Set<String>
-    let canTryFurniture: Bool
+    let selectedProductID: Product.ID?
+    var placedProductIDs: Set<Product.ID>? = nil
     @Binding var draft: String
     var isInputFocused: FocusState<Bool>.Binding
     let canSend: Bool
@@ -123,9 +122,9 @@ struct ChatSheet<Drag: Gesture>: View {
                         AssistantText(text: text)
                     case .products(let products):
                         ForEach(products) { product in
-                            ProductCardView(product: product, isSelected: placedProductIDs.contains(product.id),
-                                onToggle: { onSelect(product) }, isLoading: loadingProductIDs.contains(product.id),
-                                canTry: canTryFurniture)
+                            ProductCardView(product: product, isSelected: placedProductIDs?.contains(product.id) ?? (product.id == selectedProductID)) {
+                                onSelect(product)
+                            }
                         }
                     case .checkout(let card):
                         CheckoutCardView(card: card) { onOrder(card) }
