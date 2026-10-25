@@ -49,6 +49,7 @@ private struct DemoRoomPreview: View {
     let scannedRoom: RoomDocument?
     @State private var failed = false
     @State private var isLoading = true
+    @State private var retryID = UUID()
 
     var body: some View {
         ZStack {
@@ -57,11 +58,14 @@ private struct DemoRoomPreview: View {
                     if scannedRoom == nil && initialLayout?.scannedRoom == nil { DemoRoomThumbnail() }
                     Text("3D preview unavailable on this device")
                         .font(.caption2).foregroundStyle(.secondary)
+                    Button("Retry room") { failed = false; isLoading = true; retryID = UUID() }
+                        .font(.caption)
                 }
             } else {
                 DemoRoomWebView(controller: controller, initialLayout: initialLayout,
                                 moveEnabled: moveEnabled, scannedRoom: scannedRoom,
                                 onReady: { isLoading = false }, onFailure: { failed = true })
+                    .id(retryID)
                     .opacity(isLoading ? 0 : 1)
                     .allowsHitTesting(!isLoading)
                 if isLoading { ProgressView("Loading room…") }
@@ -95,6 +99,7 @@ private struct DemoRoomWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "previewError")
+        config.userContentController.add(context.coordinator, name: "furniture")
         let view = WKWebView(frame: .zero, configuration: config)
         view.navigationDelegate = context.coordinator
         view.isOpaque = false
@@ -120,9 +125,11 @@ private struct DemoRoomWebView: UIViewRepresentable {
         coordinator.controller.detach(uiView)
         uiView.stopLoading()
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "previewError")
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "furniture")
         uiView.navigationDelegate = nil
     }
 
+    @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         let controller: RoomPreviewController
         let onReady: () -> Void
@@ -135,10 +142,16 @@ private struct DemoRoomWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             Task { @MainActor in
                 do { try await controller.didLoad(webView); onReady() }
+                catch is CancellationError {}
                 catch { onFailure() }
             }
         }
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) { onFailure() }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.frameInfo.isMainFrame else { return }
+            if message.name == "furniture", let view = message.webView {
+                controller.receive(message.body, from: view)
+            } else { onFailure() }
+        }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { onFailure() }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { onFailure() }
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { onFailure() }

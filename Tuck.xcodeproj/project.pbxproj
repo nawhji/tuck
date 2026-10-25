@@ -46,6 +46,14 @@
 		D10000000000000000000004 /* CheckoutCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* CheckoutCardView.swift */; };
 		D10000000000000000000005 /* HomeViewModel+Checkout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000005 /* HomeViewModel+Checkout.swift */; };
 		D3000000000000000000003 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = D3000000000000000000002 /* StripePaymentSheet */; };
+		462AE02F38C35FECD289F2A8 /* FurnitureCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 635A927723EF85D3D7B71CD0 /* FurnitureCatalog.swift */; };
+		B9E3AA5B34E9675A0E2D62CB /* FurnitureModelLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1618C1C6D60CD4F767B0E77C /* FurnitureModelLibrary.swift */; };
+		C0DB54E2FD8903315D3AD37E /* FurnitureSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C214482CD791010B4CAF7EA4 /* FurnitureSearchView.swift */; };
+		9367E2AFC2800AA673C3AC07 /* DemoFurniture.js in Resources */ = {isa = PBXBuildFile; fileRef = 37DFC3E7308822C484D24873 /* DemoFurniture.js */; };
+		1E987E0015E7AB9ABDFAB32F /* FurnitureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8B5067ECF9771F6823F3D55 /* FurnitureTests.swift */; };
+		5FFC745AB4DDD4E62650A9B9 /* sofa_007_brown.usdz in Resources */ = {isa = PBXBuildFile; fileRef = E5F8B9FADC8A95C85FCDD6DF /* sofa_007_brown.usdz */; };
+		2E369D77DD072D8E4D5C1816 /* sofa_027_brown.usdz in Resources */ = {isa = PBXBuildFile; fileRef = 21E6470CE82B4A0AEBCED0C7 /* sofa_027_brown.usdz */; };
+		EFAD59571BA12868609424B6 /* sofa_028_brown.usdz in Resources */ = {isa = PBXBuildFile; fileRef = A665696751914694E38775CE /* sofa_028_brown.usdz */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -101,6 +109,14 @@
 		D20000000000000000000003 /* PaymentSheetPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PaymentSheetPresenter.swift"; sourceTree = "<group>"; };
 		D20000000000000000000004 /* CheckoutCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CheckoutCardView.swift"; sourceTree = "<group>"; };
 		D20000000000000000000005 /* HomeViewModel+Checkout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HomeViewModel+Checkout.swift"; sourceTree = "<group>"; };
+		635A927723EF85D3D7B71CD0 /* FurnitureCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FurnitureCatalog.swift; sourceTree = "<group>"; };
+		1618C1C6D60CD4F767B0E77C /* FurnitureModelLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FurnitureModelLibrary.swift; sourceTree = "<group>"; };
+		C214482CD791010B4CAF7EA4 /* FurnitureSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FurnitureSearchView.swift; sourceTree = "<group>"; };
+		37DFC3E7308822C484D24873 /* DemoFurniture.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = DemoFurniture.js; sourceTree = "<group>"; };
+		E8B5067ECF9771F6823F3D55 /* FurnitureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FurnitureTests.swift; sourceTree = "<group>"; };
+		E5F8B9FADC8A95C85FCDD6DF /* sofa_007_brown.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; name = sofa_007_brown.usdz; path = "data/sofa_007_brown.usdz"; sourceTree = SOURCE_ROOT; };
+		21E6470CE82B4A0AEBCED0C7 /* sofa_027_brown.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; name = sofa_027_brown.usdz; path = "data/sofa_027_brown.usdz"; sourceTree = SOURCE_ROOT; };
+		A665696751914694E38775CE /* sofa_028_brown.usdz */ = {isa = PBXFileReference; lastKnownFileType = file.usdz; name = sofa_028_brown.usdz; path = "data/sofa_028_brown.usdz"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -197,6 +213,8 @@
 		A00000000000000000000074 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				1618C1C6D60CD4F767B0E77C /* FurnitureModelLibrary.swift */,
+				635A927723EF85D3D7B71CD0 /* FurnitureCatalog.swift */,
 				C00000000000000000000040 /* FavoritesStore.swift */,
 				C00000000000000000000F01 /* OrderHistoryStore.swift */,
 				C00000000000000000000030 /* ScanStore.swift */,
@@ -214,6 +232,10 @@
 		A00000000000000000000075 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				A665696751914694E38775CE /* sofa_028_brown.usdz */,
+				21E6470CE82B4A0AEBCED0C7 /* sofa_027_brown.usdz */,
+				E5F8B9FADC8A95C85FCDD6DF /* sofa_007_brown.usdz */,
+				37DFC3E7308822C484D24873 /* DemoFurniture.js */,
 				A00000000000000000000076 /* Assets.xcassets */,
 				C30000000000000000000013 /* DemoRoomPreview.png */,
 				C30000000000000000000012 /* DemoRoom.html */,
@@ -236,6 +258,7 @@
 			children = (
 				D20000000000000000000005 /* HomeViewModel+Checkout.swift */,
 				D20000000000000000000004 /* CheckoutCardView.swift */,
+				C214482CD791010B4CAF7EA4 /* FurnitureSearchView.swift */,
 				B00000000000000000000000 /* HomeView.swift */,
 				B00000000000000000000001 /* HomeViewModel.swift */,
 				B00000000000000000000002 /* HomeHeader.swift */,
@@ -261,6 +284,7 @@
 		D00000000000000000000005 /* TuckTests */ = {
 			isa = PBXGroup;
 			children = (
+				E8B5067ECF9771F6823F3D55 /* FurnitureTests.swift */,
 				D00000000000000000000001 /* RoomScanTests.swift */,
 			);
 			path = TuckTests;
@@ -349,6 +373,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EFAD59571BA12868609424B6 /* sofa_028_brown.usdz in Resources */,
+				2E369D77DD072D8E4D5C1816 /* sofa_027_brown.usdz in Resources */,
+				5FFC745AB4DDD4E62650A9B9 /* sofa_007_brown.usdz in Resources */,
+				9367E2AFC2800AA673C3AC07 /* DemoFurniture.js in Resources */,
 				A000000000000000000000CE /* Assets.xcassets in Resources */,
 				C30000000000000000000003 /* DemoRoomPreview.png in Resources */,
 				C30000000000000000000002 /* DemoRoom.html in Resources */,
@@ -370,6 +398,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0DB54E2FD8903315D3AD37E /* FurnitureSearchView.swift in Sources */,
+				B9E3AA5B34E9675A0E2D62CB /* FurnitureModelLibrary.swift in Sources */,
+				462AE02F38C35FECD289F2A8 /* FurnitureCatalog.swift in Sources */,
 				E50000000000000000000001 /* RoomLibraryStore.swift in Sources */,
 				E50000000000000000000000 /* RoomPreviewController.swift in Sources */,
 				C10000000000000000000041 /* ProfileView.swift in Sources */,
@@ -410,6 +441,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1E987E0015E7AB9ABDFAB32F /* FurnitureTests.swift in Sources */,
 				D00000000000000000000002 /* RoomScanTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

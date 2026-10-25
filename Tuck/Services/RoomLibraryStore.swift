@@ -6,6 +6,8 @@ struct RoomLayoutSnapshot: Codable, Sendable, Equatable {
         let assetId: String
         let position: [Double]
         let yawRadians: Double
+        var label: String? = nil
+        var productID: String? = nil
     }
     let version: Int
     let units: String
@@ -19,12 +21,22 @@ struct RoomLayoutSnapshot: Codable, Sendable, Equatable {
         }
         try scannedRoom?.validateForPreview()
         var ids = Set<String>()
+        var products = Set<String>()
         for item in items {
             guard !item.instanceId.isEmpty, item.instanceId.count <= 120,
                   ids.insert(item.instanceId).inserted,
                   !item.assetId.isEmpty, item.assetId.count <= 120,
                   item.position.count == 3, item.position.allSatisfy({ $0.isFinite && abs($0) < 100 }),
                   item.yawRadians.isFinite else { throw RoomLibraryError.invalidLayout }
+            if let label = item.label {
+                guard !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, label.count <= 80 else {
+                    throw RoomLibraryError.invalidLayout
+                }
+            }
+            if let productID = item.productID {
+                guard FurnitureCatalog.supports(productID), item.assetId == productID,
+                      products.insert(productID).inserted else { throw RoomLibraryError.invalidLayout }
+            }
         }
     }
 }
@@ -206,7 +218,8 @@ extension RoomLayoutSnapshot {
         let epsilon = 0.00001
         for item in items {
             guard let old = baseline.items.first(where: { $0.instanceId == item.instanceId }),
-                  item.assetId == old.assetId, item.position.count == 3, old.position.count == 3 else { return true }
+                  item.assetId == old.assetId, item.label == old.label, item.productID == old.productID,
+                  item.position.count == 3, old.position.count == 3 else { return true }
             if zip(item.position, old.position).contains(where: { abs($0 - $1) > epsilon }) { return true }
             let angle = (item.yawRadians - old.yawRadians).truncatingRemainder(dividingBy: 2 * .pi)
             if min(abs(angle), 2 * .pi - abs(angle)) > epsilon { return true }
