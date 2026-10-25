@@ -5,25 +5,30 @@ struct RoomStageView: View {
     let hasScannedSpace: Bool
     let onScanTap: () -> Void
     var onViewScan: (() -> Void)? = nil
+    var viewportSize: CGSize? = nil
+    var previewController: RoomPreviewController? = nil
+    var moveEnabled = false
+    var initialLayout: RoomLayoutSnapshot? = nil
+    var scannedRoom: RoomDocument? = nil
+    @StateObject private var fallbackController = RoomPreviewController()
 
     var body: some View {
         if hasScannedSpace {
-            VStack(spacing: 4) {
-                DemoRoomPreview()
-                    .frame(width: min(UIScreen.main.bounds.width - 24, 480), height: 310)
-                    .accessibilityLabel("Demo room. Drag to rotate and move furniture.")
+            ZStack(alignment: .bottom) {
+                DemoRoomPreview(controller: previewController ?? fallbackController,
+                                initialLayout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
+                    .accessibilityLabel(moveEnabled ? "Room. Drag furniture to move along one axis." : "Room. Drag to rotate. Pinch to zoom.")
                 if let onViewScan {
                     Button("View measurements", action: onViewScan)
-                        .font(.caption.weight(.medium))
+                        .font(.caption.weight(.medium)).padding(8)
                 }
             }
+            .frame(width: viewportSize?.width, height: viewportSize?.height ?? 310)
         } else {
             Button(action: onScanTap) {
                 VStack(spacing: 14) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 46, weight: .ultraLight))
-                    Text("Scan your space to start")
-                        .font(.callout.weight(.medium))
+                    Image(systemName: "plus").font(.system(size: 46, weight: .ultraLight))
+                    Text("Scan your space to start").font(.callout.weight(.medium))
                 }
                 .foregroundStyle(Color("GrayScale300"))
                 .frame(width: 250, height: 250)
@@ -37,20 +42,28 @@ struct RoomStageView: View {
     }
 }
 
-/// Offline WebGL asset: same room and independent furniture as the HTML demo.
 private struct DemoRoomPreview: View {
+    let controller: RoomPreviewController
+    let initialLayout: RoomLayoutSnapshot?
+    let moveEnabled: Bool
+    let scannedRoom: RoomDocument?
     @State private var failed = false
+    @State private var isLoading = true
 
     var body: some View {
         ZStack {
             if failed {
                 VStack(spacing: 4) {
-                    DemoRoomThumbnail()
+                    if scannedRoom == nil && initialLayout?.scannedRoom == nil { DemoRoomThumbnail() }
                     Text("3D preview unavailable on this device")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             } else {
-                DemoRoomWebView { failed = true }
+                DemoRoomWebView(controller: controller, initialLayout: initialLayout,
+                                moveEnabled: moveEnabled, scannedRoom: scannedRoom,
+                                onReady: { isLoading = false }, onFailure: { failed = true })
+                    .opacity(isLoading ? 0 : 1)
+                if isLoading { ProgressView("Loading room…") }
             }
         }
         .background(.white)
@@ -69,9 +82,14 @@ struct DemoRoomThumbnail: View {
 }
 
 private struct DemoRoomWebView: UIViewRepresentable {
+    let controller: RoomPreviewController
+    let initialLayout: RoomLayoutSnapshot?
+    let moveEnabled: Bool
+    let scannedRoom: RoomDocument?
+    let onReady: () -> Void
     let onFailure: () -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(onFailure: onFailure) }
+    func makeCoordinator() -> Coordinator { Coordinator(controller: controller, onReady: onReady, onFailure: onFailure) }
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -82,7 +100,9 @@ private struct DemoRoomWebView: UIViewRepresentable {
         view.backgroundColor = .white
         view.scrollView.backgroundColor = .white
         view.scrollView.isScrollEnabled = false
+        view.scrollView.contentInsetAdjustmentBehavior = .never
         view.allowsLinkPreview = false
+        controller.attach(view, layout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
         guard let url = Bundle.main.url(forResource: "DemoRoom", withExtension: "html") else {
             DispatchQueue.main.async(execute: onFailure)
             return view
@@ -91,22 +111,36 @@ private struct DemoRoomWebView: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        controller.setMoveEnabled(moveEnabled)
+    }
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        coordinator.controller.detach(uiView)
         uiView.stopLoading()
         uiView.configuration.userContentController.removeScriptMessageHandler(forName: "previewError")
         uiView.navigationDelegate = nil
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        let controller: RoomPreviewController
+        let onReady: () -> Void
         let onFailure: () -> Void
-        init(onFailure: @escaping () -> Void) { self.onFailure = onFailure }
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            onFailure()
+        init(controller: RoomPreviewController, onReady: @escaping () -> Void, onFailure: @escaping () -> Void) {
+            self.controller = controller
+            self.onReady = onReady
+            self.onFailure = onFailure
         }
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            Task { @MainActor in
+                do { try await controller.didLoad(webView); onReady() }
+                catch { onFailure() }
+            }
+        }
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) { onFailure() }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { onFailure() }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { onFailure() }
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { onFailure() }
     }
 }
 

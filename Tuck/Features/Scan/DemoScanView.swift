@@ -2,7 +2,7 @@ import AVFoundation
 import RoomPlan
 import SwiftUI
 
-/// Figma scan flow. The finish destination is always the bundled demo room.
+/// Capture a real room before opening the editable Home scene.
 @MainActor
 struct DemoScanView: View {
     let onFinish: (SavedScan?) -> Void
@@ -15,6 +15,7 @@ struct DemoScanView: View {
     @State private var cameraMessage: String?
     @State private var progress: CGFloat = 0.04
     @State private var isFinishing = false
+    @State private var finishError: String?
     @State private var finishTask: Task<Void, Never>?
 
     private var supportsLiDAR: Bool { RoomCaptureSession.isSupported }
@@ -46,7 +47,7 @@ struct DemoScanView: View {
                         }
                     } else if scanner.phase == .failed {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(scanner.errorMessage ?? "Room scanning is unavailable. You can still open the demo room.")
+                            Text(scanner.errorMessage ?? "Room scanning is unavailable. Try again, or open a saved room from Profile.")
                                 .font(.caption).foregroundStyle(.white.opacity(0.8))
                             Button("Retry room scan") { Task { await startCamera() } }
                                 .font(.caption.weight(.medium)).foregroundStyle(.white)
@@ -59,6 +60,9 @@ struct DemoScanView: View {
                 scanPanel
             }
         }
+        .alert("Room scan", isPresented: Binding(get: { finishError != nil }, set: { if !$0 { finishError = nil } })) {
+            Button("OK", role: .cancel) { finishError = nil }
+        } message: { Text(finishError ?? "") }
         .preferredColorScheme(.light)
         .interactiveDismissDisabled()
         .task { await startCamera() }
@@ -77,6 +81,9 @@ struct DemoScanView: View {
                 guard !isFinishing else { return }
                 Task { await startCamera() }
             } else if phase == .background {
+                finishTask?.cancel()
+                finishTask = nil
+                isFinishing = false
                 cameraActive = false
                 scanner.cancel()
             }
@@ -129,7 +136,7 @@ struct DemoScanView: View {
     private var scanPanel: some View {
         VStack(spacing: 17) {
             Capsule().fill(Color.black.opacity(0.10)).frame(width: 34, height: 4)
-            Text(isFinishing ? "Opening your demo room…" : "Scanning the room…")
+            Text(isFinishing ? "Preparing your room…" : "Scanning the room…")
                 .font(.system(size: 13)).foregroundStyle(.secondary)
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
@@ -148,7 +155,7 @@ struct DemoScanView: View {
                 .foregroundStyle(.white).background(brown, in: Capsule())
             }
             .disabled(isFinishing)
-            Text("A demo room opens after scanning.")
+            Text("Finish scanning to view and arrange your room.")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 24).padding(.top, 10).padding(.bottom, 18)
@@ -170,7 +177,7 @@ struct DemoScanView: View {
         cameraAllowed = permitted
         cameraActive = scenePhase == .active
         guard permitted else {
-            cameraMessage = "Camera access is off. You can still finish and open the demo room."
+            cameraMessage = "Camera access is off. Open a saved room from Profile instead."
             return
         }
         cameraMessage = nil
@@ -179,26 +186,36 @@ struct DemoScanView: View {
 
     private func finish() {
         guard !isFinishing else { return }
+        guard supportsLiDAR else { onFinish(nil); return }
+        guard scanner.phase == .scanning || scanner.phase == .processing || scanner.phase == .ready else {
+            finishError = scanner.errorMessage ?? "No room was captured. Try scanning again."
+            return
+        }
         isFinishing = true
         withAnimation(.easeOut(duration: 0.25)) { progress = 1 }
-        scanner.stop()
+        if scanner.phase == .scanning { scanner.stop() }
+        guard scanner.phase != .scanning else {
+            isFinishing = false
+            finishError = "The camera isn't ready yet. Wait a moment and try again."
+            return
+        }
+        if scanner.phase == .ready && scanner.files == nil { scanner.save() }
         finishTask = Task {
-            // Give real RoomPlan a bounded opportunity to finish; never block the demo on it.
-            if supportsLiDAR {
-                for _ in 0..<80 {
-                    if scanner.phase == .failed || (scanner.phase == .ready && !scanner.isSaving) { break }
-                    do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
-                }
-            } else {
-                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            for _ in 0..<1200 {
+                if scanner.phase == .idle || scanner.phase == .failed || (scanner.phase == .ready && !scanner.isSaving) { break }
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
             }
             guard !Task.isCancelled else { return }
+            guard scanner.phase == .ready, !scanner.isSaving,
+                  let document = scanner.document, let files = scanner.files else {
+                isFinishing = false
+                finishError = scanner.errorMessage ?? scanner.saveMessage ?? "The room couldn't finish processing. Try again or scan the room again."
+                return
+            }
+            do { try document.validateForPreview() }
+            catch { isFinishing = false; finishError = error.localizedDescription; return }
             cameraActive = false
-            let saved: SavedScan?
-            if let document = scanner.document, let files = scanner.files {
-                saved = SavedScan(document: document, files: files)
-            } else { saved = nil }
-            onFinish(saved)
+            onFinish(SavedScan(document: document, files: files))
         }
     }
 }
@@ -247,13 +264,13 @@ private final class PlainCameraView: UIView {
             do {
                 guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
                     session.commitConfiguration()
-                    DispatchQueue.main.async { report?("Camera is unavailable. You can still open the demo room.") }
+                    DispatchQueue.main.async { report?("Camera is unavailable. Open a saved room from Profile instead.") }
                     return
                 }
                 let input = try AVCaptureDeviceInput(device: device)
                 guard session.canAddInput(input) else {
                     session.commitConfiguration()
-                    DispatchQueue.main.async { report?("Camera could not start. You can still open the demo room.") }
+                    DispatchQueue.main.async { report?("Camera could not start. Open a saved room from Profile instead.") }
                     return
                 }
                 session.addInput(input)
@@ -261,7 +278,7 @@ private final class PlainCameraView: UIView {
                 session.startRunning()
             } catch {
                 session.commitConfiguration()
-                DispatchQueue.main.async { report?("Camera could not start. You can still open the demo room.") }
+                DispatchQueue.main.async { report?("Camera could not start. Open a saved room from Profile instead.") }
             }
         }
     }

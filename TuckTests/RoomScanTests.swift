@@ -156,15 +156,16 @@ final class FavoritesStoreTests: XCTestCase {
 
 @MainActor
 final class IntegratedHomeFlowTests: XCTestCase {
-    func testDemoDestinationWorksWithoutLiDAROrSavedResult() {
+    func testFailedScanDoesNotPretendToHaveARoom() {
         let model = HomeViewModel()
         model.startScan()
         XCTAssertTrue(model.isPresentingScan)
-        model.finishDemoScan()
+        model.finishScan(nil)
         XCTAssertFalse(model.isPresentingScan)
-        XCTAssertTrue(model.hasScannedSpace)
+        XCTAssertFalse(model.hasScannedSpace)
         XCTAssertEqual(model.sheetDetent, .collapsed)
         XCTAssertNil(model.savedScan)
+        XCTAssertNotNil(model.scanLoadError)
     }
 
     func testScanAndProfileCannotPresentAtTheSameTime() {
@@ -180,7 +181,7 @@ final class IntegratedHomeFlowTests: XCTestCase {
         XCTAssertFalse(model.isProfilePresented)
     }
 
-    func testFinishingDemoRetainsActualMeasurementsForProfile() {
+    func testFinishingScanOpensActualMeasurements() {
         let model = HomeViewModel()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let files = ScanFiles(directory: directory,
@@ -188,8 +189,7 @@ final class IntegratedHomeFlowTests: XCTestCase {
                               nativeJSON: directory.appendingPathComponent("captured-room.json"),
                               model: nil, modelWarning: nil)
         model.startScan()
-        model.acceptScan(document: .sample, files: files)
-        model.finishDemoScan()
+        model.finishScan(SavedScan(document: .sample, files: files))
         XCTAssertEqual(model.savedScan?.id, RoomDocument.sample.id)
         XCTAssertEqual(model.savedScan?.files.json, files.json)
         XCTAssertTrue(model.hasScannedSpace)
@@ -205,5 +205,112 @@ final class IntegratedHomeFlowTests: XCTestCase {
         XCTAssertEqual(scanner.phase, .idle)
         XCTAssertNil(scanner.errorMessage)
         XCTAssertEqual(scanner.wallCount, 0)
+    }
+}
+
+final class ScannedRoomLibraryTests: XCTestCase {
+    private func withRoots(_ body: (URL, URL) throws -> Void) throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try body(root.appendingPathComponent("scans"), root.appendingPathComponent("layouts"))
+    }
+    private func snapshot() -> RoomLayoutSnapshot {
+        let doc = RoomDocument.sample
+        return RoomLayoutSnapshot(version: 1, units: "meters", upAxis: "Y", items: doc.objects.map {
+            .init(instanceId: $0.id, assetId: "scan-" + $0.id,
+                  position: [Double($0.position.x) + 0.25, Double($0.position.y), Double($0.position.z)], yawRadians: 0.4)
+        }, scannedRoom: doc)
+    }
+    func testRoom1IsRegisteredOnceAndIsNotOverwrittenAfterEditing() throws {
+        try withRoots { scans, layouts in
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let entries = try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts)
+            XCTAssertEqual(entries.count, 1)
+            let room = try XCTUnwrap(entries.first)
+            XCTAssertEqual(room.name, "Room 1")
+            XCTAssertEqual(room.layout?.items.count, 7)
+            XCTAssertNil(room.layout?.scannedRoom)
+            let edited = RoomLayoutSnapshot(version: 1, units: "meters", upAxis: "Y", items: [])
+            try RoomLibraryStore.saveExisting(id: room.id, layout: edited, scansRoot: scans, layoutsRoot: layouts)
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            XCTAssertEqual(try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first?.layout, edited)
+        }
+    }
+    func testScannedGeometryAndEditedTransformsSurviveSaveAndReload() throws {
+        try withRoots { scans, layouts in
+            let original = snapshot()
+            let id = try RoomLibraryStore.saveNew(name: "My scanned room", layout: original, layoutsRoot: layouts)
+            let entry = try XCTUnwrap(RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first)
+            XCTAssertEqual(entry.id, id)
+            XCTAssertEqual(entry.layout?.items, original.items)
+            XCTAssertEqual(entry.layout?.scannedRoom?.walls, original.scannedRoom?.walls)
+            XCTAssertEqual(entry.layout?.scannedRoom?.objects, original.scannedRoom?.objects)
+            XCTAssertEqual(entry.layout?.scannedRoom?.id, original.scannedRoom?.id)
+        }
+    }
+    func testNamedScanDoesNotAppearTwiceAndRetainsRawMeasurements() throws {
+        try withRoots { scans, layouts in
+            let doc = RoomDocument.sample
+            let dir = scans.appendingPathComponent(doc.id)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+            let raw = try encoder.encode(doc)
+            let file = dir.appendingPathComponent("room.json")
+            try raw.write(to: file)
+            let id = try RoomLibraryStore.saveNew(name: "Named scan", layout: snapshot(), layoutsRoot: layouts)
+            let entries = try RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts)
+            XCTAssertEqual(entries.count, 1)
+            XCTAssertEqual(entries.first?.id, id)
+            XCTAssertEqual(entries.first?.scan?.id, doc.id)
+            XCTAssertEqual(try Data(contentsOf: file), raw)
+        }
+    }
+    func testInvalidGeometryCannotReplaceSavedRoom() throws {
+        try withRoots { scans, layouts in
+            let id = try RoomLibraryStore.saveNew(name: "Good room", layout: snapshot(), layoutsRoot: layouts)
+            let file = layouts.appendingPathComponent(id + ".json"), before = try Data(contentsOf: file)
+            let encoded = try JSONEncoder().encode(snapshot())
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            var doc = try XCTUnwrap(json["scannedRoom"] as? [String: Any])
+            doc["units"] = "feet"; json["scannedRoom"] = doc
+            let bad = try JSONDecoder().decode(RoomLayoutSnapshot.self, from: JSONSerialization.data(withJSONObject: json))
+            XCTAssertThrowsError(try RoomLibraryStore.saveExisting(id: id, layout: bad, scansRoot: scans, layoutsRoot: layouts))
+            XCTAssertEqual(try Data(contentsOf: file), before)
+        }
+    }
+    @MainActor
+    func testHomeStartsEmptyAndOpensSavedScanForEditing() {
+        let model = HomeViewModel(), layout = snapshot()
+        XCTAssertFalse(model.hasScannedSpace)
+        let sceneID = model.sceneID
+        model.isProfilePresented = true
+        model.openSavedRoom(.init(id: "saved", name: "My room", updatedAt: Date(), layout: layout, scan: nil))
+        XCTAssertTrue(model.hasScannedSpace)
+        XCTAssertFalse(model.isProfilePresented)
+        XCTAssertNotEqual(model.sceneID, sceneID)
+        XCTAssertEqual(model.activeLayout, layout)
+        XCTAssertEqual(model.sheetTitle, "My room")
+        model.removeCurrentRoom()
+        XCTAssertNil(model.activeLayout)
+        XCTAssertFalse(model.hasScannedSpace)
+    }
+    func testLegacyMockLayoutStillDecodesWithoutScanGeometry() throws {
+        let json = #"{"version":1,"units":"meters","upAxis":"Y","items":[]}"#
+        let layout = try JSONDecoder().decode(RoomLayoutSnapshot.self, from: Data(json.utf8))
+        try layout.validate()
+        XCTAssertNil(layout.scannedRoom)
+    }
+    func testRoom1CanBeExplicitlyReplacedWithAnActualScan() throws {
+        try withRoots { scans, layouts in
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let original = try XCTUnwrap(RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first)
+            try RoomLibraryStore.saveExisting(id: original.id, layout: snapshot(), scansRoot: scans, layoutsRoot: layouts)
+            try RoomLibraryStore.ensureDemoRoom(layoutsRoot: layouts)
+            let updated = try XCTUnwrap(RoomLibraryStore.all(scansRoot: scans, layoutsRoot: layouts).first)
+            XCTAssertEqual(updated.name, "Room 1")
+            XCTAssertEqual(updated.layout?.scannedRoom?.id, RoomDocument.sample.id)
+        }
     }
 }
