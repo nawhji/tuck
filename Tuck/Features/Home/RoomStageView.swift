@@ -63,6 +63,7 @@ private struct DemoRoomPreview: View {
                                 moveEnabled: moveEnabled, scannedRoom: scannedRoom,
                                 onReady: { isLoading = false }, onFailure: { failed = true })
                     .opacity(isLoading ? 0 : 1)
+                    .allowsHitTesting(!isLoading)
                 if isLoading { ProgressView("Loading room…") }
             }
         }

@@ -24,6 +24,25 @@ enum HomeSheetLayout {
     }
 }
 
+/// Stable suggested names derive from saved room numbers, without creating an empty record.
+enum RoomNameSequence {
+    static func nextName(in names: [String]) -> String {
+        let numbers = Set(names.compactMap { name -> Int? in
+            let words = name.lowercased().split(whereSeparator: { $0.isWhitespace })
+            let suffix: Substring?
+            if words.count == 2, words[0] == "room" { suffix = words[1] }
+            else if words.count == 3, words[0] == "new", words[1] == "room" { suffix = words[2] }
+            else { suffix = nil }
+            guard let suffix, let value = Int(suffix), value > 0 else { return nil }
+            return value
+        })
+        let (candidate, overflow) = max(0, numbers.max() ?? 0).addingReportingOverflow(1)
+        var next = overflow ? 1 : candidate
+        while numbers.contains(next) { next += 1 }
+        return "New Room \(next)"
+    }
+}
+
 /// Home chat and local scanned-room editor state.
 @Observable
 final class HomeViewModel {
@@ -37,6 +56,8 @@ final class HomeViewModel {
     var sceneID = UUID()
     var activeLayout: RoomLayoutSnapshot?
     var activeRoomName: String?
+    var activeRoomID: String?
+    private(set) var newRoomName = "New Room 1"
     var savedScan: SavedScan?
     var scanLoadError: String?
     var isSimulating = false
@@ -51,7 +72,16 @@ final class HomeViewModel {
     private var roomGeneration = 0
     private var responseTask: Task<Void, Never>?
 
-    var sheetTitle: String { activeRoomName ?? "\(userName)’s Room" }
+    var roomDisplayName: String { activeRoomName ?? newRoomName }
+    var suggestedSaveName: String { activeRoomID == nil ? roomDisplayName : newRoomName }
+
+    func updateRoomNames(_ entries: [RoomLibraryEntry]) {
+        newRoomName = RoomNameSequence.nextName(in: entries.map(\.name))
+    }
+
+    func needsSaveBeforeSwitch(layoutChanged: Bool) -> Bool {
+        hasScannedSpace && layoutChanged
+    }
     var canSend: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isResponding }
 
     // MARK: - Actions
@@ -64,7 +94,7 @@ final class HomeViewModel {
     func finishScan(_ scan: SavedScan?) {
         isPresentingScan = false
         guard let scan else {
-            scanLoadError = "No room was captured. Scan again on a LiDAR device, or open Room 1 in Profile → My rooms."
+            scanLoadError = "No room was captured. Scan again on a LiDAR device, or open Sample Room in My rooms."
             return
         }
         acceptScan(document: scan.document, files: scan.files)
@@ -74,7 +104,11 @@ final class HomeViewModel {
     @MainActor
     func prepareLibrary() async {
         do {
-            try await Task.detached(priority: .userInitiated) { try RoomLibraryStore.ensureDemoRoom() }.value
+            let entries = try await Task.detached(priority: .userInitiated) {
+                try RoomLibraryStore.ensureDemoRoom()
+                return try RoomLibraryStore.all()
+            }.value
+            updateRoomNames(entries)
         } catch { scanLoadError = error.localizedDescription }
     }
 
@@ -84,15 +118,25 @@ final class HomeViewModel {
         activeLayout = entry.layout
         savedScan = entry.scan
         activeRoomName = entry.name
+        activeRoomID = entry.id
         hasScannedSpace = true
         sheetDetent = .collapsed
         isProfilePresented = false
     }
+    /// Saving before another scan updates metadata without replacing the rendered scene.
+    func recordSavedRoom(_ entry: RoomLibraryEntry) {
+        activeRoomID = entry.id
+        activeRoomName = entry.name
+        activeLayout = entry.layout
+        savedScan = entry.scan
+    }
+
     func acceptScan(document: RoomDocument, files: ScanFiles) {
         roomGeneration += 1
         sceneID = UUID()
         activeLayout = nil
-        activeRoomName = "Scanned room"
+        activeRoomName = newRoomName
+        activeRoomID = nil
         savedScan = SavedScan(document: document, files: files)
         hasScannedSpace = true
     }
@@ -112,6 +156,7 @@ final class HomeViewModel {
         sceneID = UUID()
         activeLayout = nil
         activeRoomName = nil
+        activeRoomID = nil
         savedScan = nil
         selectedProductID = nil
         isSimulating = false

@@ -18,6 +18,12 @@ struct HomeView: View {
     @State private var saveError: String?
     @State private var isSavingRoom = false
     @State private var isLoadingRooms = false
+    @State private var showsRoomLibrary = false
+    @State private var queuedRoomSelection: RoomLibraryEntry?
+    @State private var roomAfterLeaving: RoomLibraryEntry?
+    @State private var scanAfterLeaving = false
+    @State private var leaveAfterPickerDismiss = false
+    @State private var deferredSaveError: String?
 
     init(model: HomeViewModel = HomeViewModel()) {
         _model = State(initialValue: model)
@@ -34,12 +40,12 @@ struct HomeView: View {
         .animation(.spring(duration: 0.35), value: isInputFocused)
         .preferredColorScheme(.light)
         .environment(favorites)
-        .sheet(isPresented: $model.isProfilePresented) {
-            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites, onOpenRoom: { entry in
-                moveEnabled = false
-                preview.setMoveEnabled(false)
-                model.openSavedRoom(entry)
-            })
+        .sheet(isPresented: $model.isProfilePresented, onDismiss: roomPickerDismissed) {
+            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites,
+                        onOpenRoom: queueRoomSelection)
+        }
+        .sheet(isPresented: $showsRoomLibrary, onDismiss: roomPickerDismissed) {
+            MyRoomsSheet(onOpenRoom: queueRoomSelection)
         }
         .onChange(of: model.isProfilePresented) { _, presented in
             if presented { isInputFocused = false }
@@ -48,30 +54,33 @@ struct HomeView: View {
         .sheet(isPresented: $showsSavedRoom) {
             if let scan = model.savedScan { SavedRoomView(scan: scan) }
         }
-        .sheet(isPresented: $showExistingRooms) {
-            existingRoomPicker
+        .sheet(isPresented: $showExistingRooms, onDismiss: existingRoomPickerDismissed) {
+            existingRoomPicker.interactiveDismissDisabled(isSavingRoom)
         }
-        .confirmationDialog("Save this room?", isPresented: $showLeaveDialog, titleVisibility: .visible) {
+        .confirmationDialog(roomAfterLeaving == nil && !scanAfterLeaving ? "Save this room?" : "Save changes?", isPresented: $showLeaveDialog, titleVisibility: .visible) {
             if !existingRooms.isEmpty {
                 Button("Save to existing room") { showExistingRooms = true }
             }
             Button("Save as new room") {
-                roomName = ""
+                roomName = model.suggestedSaveName
                 showNewRoomName = true
             }
-            Button("Delete current room", role: .destructive) { leaveRoom() }
-            Button("Cancel", role: .cancel) {}
+            Button(roomAfterLeaving == nil && !scanAfterLeaving ? "Delete current room" : "Discard changes", role: .destructive) { discardAndContinue() }
+            Button("Cancel", role: .cancel) { cancelLeave() }
         } message: {
-            Text("Save your layout before leaving. Deleting the current room keeps previously saved rooms.")
+            Text(scanAfterLeaving ? "Save your changes before starting a new scan."
+                 : roomAfterLeaving == nil
+                 ? "Save your layout before leaving. Deleting the current room keeps previously saved rooms."
+                 : "Save your changes before opening another room.")
         }
         .alert("Save new room", isPresented: $showNewRoomName) {
             TextField("Room name", text: $roomName)
             Button("Save") { saveRoom(existingID: nil) }
                 .disabled(roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || roomName.count > 60)
-            Button("Cancel", role: .cancel) {}
+            Button("Cancel", role: .cancel) { cancelLeave() }
         } message: { Text("Give your room a name.") }
         .alert("Tuck", isPresented: Binding(
-            get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms &&
+            get: { !model.isProfilePresented && !model.isPresentingScan && !showsSavedRoom && !showExistingRooms && !showsRoomLibrary &&
                 (saveError != nil || model.scanLoadError != nil || favorites.errorMessage != nil) },
             set: { if !$0 { saveError = nil; model.scanLoadError = nil; favorites.errorMessage = nil } }
         )) {
@@ -111,7 +120,7 @@ struct HomeView: View {
         let viewport = CGSize(width: geometry.size.width, height: max(160, bottom - top))
         return ZStack(alignment: .topLeading) {
             RoomStageView(hasScannedSpace: model.hasScannedSpace,
-                          onScanTap: model.startScan,
+                          onScanTap: requestScan,
                           onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true },
                           viewportSize: viewport,
                           previewController: preview,
@@ -119,24 +128,15 @@ struct HomeView: View {
                           initialLayout: model.activeLayout,
                           scannedRoom: model.activeLayout == nil ? model.savedScan?.document : model.activeLayout?.scannedRoom)
                 .id(model.sceneID)
+                .allowsHitTesting(!isLoadingRooms && !isSavingRoom)
                 .frame(width: viewport.width, height: viewport.height)
                 .position(x: geometry.size.width / 2, y: top + viewport.height / 2)
-            HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile)
+            HomeHeader(initial: model.userInitial, onAvatarTap: model.openProfile,
+                       roomName: model.roomDisplayName, onRoomsTap: openRoomLibrary,
+                       roomsEnabled: !isLoadingRooms && !isSavingRoom)
+                .disabled(isLoadingRooms || isSavingRoom)
                 .padding(.top, 8)
-            if model.hasScannedSpace {
-                Button(action: prepareToLeave) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                    .font(.body)
-                    .foregroundStyle(Color("TuckBrown"))
-                    .padding(.vertical, 8)
-                }
-                .disabled(isSavingRoom || isLoadingRooms)
-                .padding(.leading, 19).padding(.top, 49)
-                .accessibilityLabel("Back. Save or delete the current room.")
-            }
+
         }
         .ignoresSafeArea(.keyboard)
     }
@@ -167,7 +167,7 @@ struct HomeView: View {
             .opacity(toolsVisible ? 1 : 0)
             .allowsHitTesting(toolsVisible)
             ChatSheet(
-                title: model.sheetTitle, messages: model.messages,
+                messages: model.messages,
                 selectedProductID: model.selectedProductID, draft: $model.draft,
                 isInputFocused: $isInputFocused, canSend: model.canSend,
                 dragGesture: sheetDrag(availableHeight: geometry.size.height),
@@ -180,12 +180,13 @@ struct HomeView: View {
     }
 
     private var cameraButton: some View {
-        Button(action: model.startScan) {
+        Button(action: requestScan) {
             Image(systemName: "camera")
                 .font(.system(size: 20)).foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .background(Color(.systemGray3), in: Circle())
         }
+        .disabled(isLoadingRooms || isSavingRoom)
         .accessibilityLabel("Scan space")
     }
 
@@ -208,6 +209,7 @@ struct HomeView: View {
                     }
                 }
         }
+        .disabled(isLoadingRooms || isSavingRoom)
         .accessibilityLabel("Furniture move mode")
         .accessibilityValue(moveEnabled ? "On" : "Off")
     }
@@ -239,6 +241,7 @@ struct HomeView: View {
             }
     }
 
+    /// Temporarily has no visible Back button; retain the leave/save action for reuse.
     private func prepareToLeave() {
         guard !isLoadingRooms, !isSavingRoom else { return }
         isInputFocused = false
@@ -246,9 +249,106 @@ struct HomeView: View {
         Task {
             defer { isLoadingRooms = false }
             do {
-                existingRooms = try await Task.detached(priority: .userInitiated) { try RoomLibraryStore.all() }.value
-                showLeaveDialog = true
+                let changed = model.hasScannedSpace ? try await preview.hasUnsavedChanges() : false
+                if model.needsSaveBeforeSwitch(layoutChanged: changed) {
+                    try await loadSaveChoices(opening: nil)
+                } else {
+                    roomAfterLeaving = nil
+                    leaveRoom()
+                }
             } catch { saveError = error.localizedDescription }
+        }
+    }
+
+    private func requestScan() {
+        guard !isLoadingRooms, !isSavingRoom, !model.isPresentingScan, !model.isProfilePresented else { return }
+        isInputFocused = false
+        isLoadingRooms = true
+        Task {
+            defer { isLoadingRooms = false }
+            do {
+                let changed = model.hasScannedSpace ? try await preview.hasUnsavedChanges() : false
+                if model.needsSaveBeforeSwitch(layoutChanged: changed) {
+                    try await loadSaveChoices(opening: nil, forScan: true)
+                } else { beginScan() }
+            } catch { cancelLeave(); saveError = error.localizedDescription }
+        }
+    }
+
+    private func beginScan() {
+        cancelLeave()
+        resetEditorInteraction()
+        model.startScan()
+    }
+
+    private func cancelLeave() {
+        roomAfterLeaving = nil
+        scanAfterLeaving = false
+    }
+
+    private func discardAndContinue() {
+        guard scanAfterLeaving else { leaveRoom(); return }
+        isLoadingRooms = true
+        Task {
+            defer { isLoadingRooms = false }
+            do {
+                // If the new scan is cancelled, return to the unedited previous room.
+                try await preview.discardChanges()
+                beginScan()
+            } catch { cancelLeave(); saveError = error.localizedDescription }
+        }
+    }
+
+    private func openRoomLibrary() {
+        guard !isSavingRoom, !isLoadingRooms, !model.isPresentingScan else { return }
+        isInputFocused = false
+        showsRoomLibrary = true
+    }
+
+    private func queueRoomSelection(_ entry: RoomLibraryEntry) {
+        queuedRoomSelection = entry
+        showsRoomLibrary = false
+        model.isProfilePresented = false
+    }
+
+    /// Wait for the presenting sheet to finish dismissing before showing a save dialog.
+    private func roomPickerDismissed() {
+        guard let entry = queuedRoomSelection else { return }
+        queuedRoomSelection = nil
+        guard entry.id != model.activeRoomID else { return }
+        isLoadingRooms = true
+        Task {
+            defer { isLoadingRooms = false }
+            do {
+                let changed: Bool
+                if !model.hasScannedSpace { changed = false }
+                else { changed = try await preview.hasUnsavedChanges() }
+                if model.needsSaveBeforeSwitch(layoutChanged: changed) {
+                    try await loadSaveChoices(opening: entry)
+                } else {
+                    roomAfterLeaving = entry
+                    leaveRoom()
+                }
+            } catch { saveError = error.localizedDescription }
+        }
+    }
+
+    private func loadSaveChoices(opening entry: RoomLibraryEntry?, forScan: Bool = false) async throws {
+        existingRooms = try await Task.detached(priority: .userInitiated) { try RoomLibraryStore.all() }.value
+        model.updateRoomNames(existingRooms)
+        roomAfterLeaving = entry
+        scanAfterLeaving = forScan
+        showLeaveDialog = true
+    }
+
+    private func existingRoomPickerDismissed() {
+        if leaveAfterPickerDismiss {
+            leaveAfterPickerDismiss = false
+            leaveRoom()
+        } else { cancelLeave() }
+        if let deferredSaveError {
+            saveError = deferredSaveError
+            self.deferredSaveError = nil
         }
     }
 
@@ -279,25 +379,56 @@ struct HomeView: View {
             do {
                 let layout = try await preview.snapshot()
                 let name = roomName
-                try await Task.detached(priority: .userInitiated) {
-                    if let existingID { try RoomLibraryStore.saveExisting(id: existingID, layout: layout) }
-                    else { _ = try RoomLibraryStore.saveNew(name: name, layout: layout) }
+                let result = try await Task.detached(priority: .userInitiated) {
+                    let savedID: String
+                    if let existingID {
+                        try RoomLibraryStore.saveExisting(id: existingID, layout: layout)
+                        savedID = existingID
+                    } else { savedID = try RoomLibraryStore.saveNew(name: name, layout: layout) }
+                    return (entries: try RoomLibraryStore.all(), savedID: savedID)
                 }.value
-                showExistingRooms = false
-                leaveRoom()
+                let entries = result.entries
+                model.updateRoomNames(entries)
+                if scanAfterLeaving {
+                    guard let saved = entries.first(where: { $0.id == result.savedID }) else { throw RoomLibraryError.roomNotFound }
+                    model.recordSavedRoom(saved)
+                    preview.acceptSavedSnapshot(layout)
+                }
+                // An overwrite can change the selected destination. Open its fresh saved version.
+                if let destination = roomAfterLeaving {
+                    let sourceID = destination.scan?.id ?? destination.layout?.scannedRoom?.id
+                    guard let fresh = entries.first(where: { $0.id == destination.id }) ?? entries.first(where: {
+                        sourceID != nil && ($0.scan?.id == sourceID || $0.layout?.scannedRoom?.id == sourceID)
+                    }) else { throw RoomLibraryError.roomNotFound }
+                    roomAfterLeaving = fresh
+                }
+                if showExistingRooms {
+                    leaveAfterPickerDismiss = true
+                    showExistingRooms = false
+                } else { leaveRoom() }
             } catch {
-                showExistingRooms = false
-                saveError = error.localizedDescription
+                if showExistingRooms {
+                    deferredSaveError = error.localizedDescription
+                    showExistingRooms = false
+                } else { cancelLeave(); saveError = error.localizedDescription }
             }
         }
     }
 
-    private func leaveRoom() {
+    private func resetEditorInteraction() {
         noticeTask?.cancel()
         moveNotice = nil
         moveEnabled = false
         preview.setMoveEnabled(false)
-        model.removeCurrentRoom()
+    }
+
+    private func leaveRoom() {
+        if scanAfterLeaving { beginScan(); return }
+        resetEditorInteraction()
+        let destination = roomAfterLeaving
+        cancelLeave()
+        if let destination { model.openSavedRoom(destination) }
+        else { model.removeCurrentRoom() }
     }
 }
 
