@@ -73,6 +73,18 @@ final class RoomPreviewController: ObservableObject {
         try await applyMoveMode()
     }
 
+    func chatContext(roomID: String, roomName: String) async throws -> RoomChatContext {
+        guard isReady, let view = webView else { throw RoomLibraryError.previewNotReady }
+        let value = try await view.evaluateJavaScript("JSON.stringify(window.tuckEditor.chatContext())")
+        guard webView === view, isReady, let json = value as? String else { throw RoomLibraryError.previewNotReady }
+        var context = try JSONDecoder().decode(RoomChatContext.self, from: Data(json.utf8))
+        context.roomID = roomID
+        context.roomName = roomName
+        context.revision = UUID().uuidString
+        try context.validate()
+        return context
+    }
+
     func snapshot() async throws -> RoomLayoutSnapshot {
         guard isReady, let webView else { throw RoomLibraryError.previewNotReady }
         let value = try await webView.evaluateJavaScript("JSON.stringify(window.tuckEditor.layout())")

@@ -1,8 +1,9 @@
 import Foundation
+import CryptoKit
 
 /// 채팅 스레드의 한 항목. 에이전트 응답이 스트리밍되며 채워진다.
 struct ChatMessage: Identifiable, Equatable {
-    enum Role {
+    enum Role: String, Codable {
         case user
         case assistant
     }
@@ -65,5 +66,73 @@ extension Product {
         guard let cents else { return "" }
         let amount = String(format: "%.2f", Double(cents) / 100)
         return currency == "USD" ? "$ \(amount)" : "\(amount) \(currency)"
+    }
+}
+
+
+/// Local room histories store raw text, never credentials or cached product prices.
+/// Callers rebuild cards from the current catalog after loading.
+struct RoomChatStore {
+    private struct Record: Codable {
+        let version: Int
+        let roomKey: String
+        let messages: [Entry]
+    }
+    private struct Entry: Codable {
+        let id: UUID
+        let role: ChatMessage.Role
+        let rawText: String
+        let interrupted: Bool
+    }
+    enum StoreError: LocalizedError {
+        case unreadable, tooLarge
+        var errorDescription: String? {
+            switch self {
+            case .unreadable: "This room's chat couldn't be loaded. Its saved file has been kept."
+            case .tooLarge: "This room's chat is too large to save. Its previous file has been kept."
+            }
+        }
+    }
+
+    let directory: URL
+    init(directory: URL? = nil) {
+        self.directory = directory ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("RoomChats", isDirectory: true)
+    }
+
+    func fileURL(for key: String) -> URL {
+        let hash = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent(hash + ".json")
+    }
+
+    func load(_ key: String) throws -> [ChatMessage] {
+        let url = fileURL(for: key)
+        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
+        do {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size <= 10_000_000 else { throw StoreError.unreadable }
+            let record = try JSONDecoder().decode(Record.self, from: Data(contentsOf: url))
+            guard record.version == 1, record.roomKey == key, record.messages.count <= 2000,
+                  Set(record.messages.map(\.id)).count == record.messages.count else { throw StoreError.unreadable }
+            return record.messages.filter { !$0.rawText.isEmpty }.map { entry in
+                let suffix = entry.interrupted && entry.role == .assistant
+                    ? "\n\n[This reply was interrupted. Send a follow-up to continue.]" : ""
+                return ChatMessage(id: entry.id, role: entry.role, text: entry.rawText + suffix)
+            }
+        } catch { throw StoreError.unreadable }
+    }
+
+    func save(_ messages: [ChatMessage], key: String, streamingID: UUID? = nil) throws {
+        // Refuse to replace an unreadable existing history, even across app launches.
+        _ = try load(key)
+        let entries = messages.filter { !$0.rawText.isEmpty }.map {
+            Entry(id: $0.id, role: $0.role, rawText: $0.rawText, interrupted: $0.id == streamingID)
+        }
+        guard entries.count <= 2000 else { throw StoreError.tooLarge }
+        guard Set(entries.map(\.id)).count == entries.count else { throw StoreError.unreadable }
+        let data = try JSONEncoder().encode(Record(version: 1, roomKey: key, messages: entries))
+        guard data.count <= 10_000_000 else { throw StoreError.tooLarge }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try data.write(to: fileURL(for: key), options: .atomic)
     }
 }

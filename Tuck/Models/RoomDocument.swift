@@ -157,3 +157,58 @@ extension RoomElement {
     }
 }
 #endif
+
+
+/// A fresh, read-only snapshot of the displayed scene, not a claim of fit.
+struct RoomChatContext: Codable, Sendable {
+    struct Bounds: Codable, Sendable {
+        let min: [Double]
+        let max: [Double]
+    }
+    struct Element: Codable, Sendable {
+        let id: String
+        let category: String
+        let label: String?
+        let confidence: String?
+        let dimensionsMeters: [Double]
+        let centerMeters: [Double]
+        let yawRadians: Double?
+        let worldCornersMeters: [[Double]]
+        let boundsMeters: Bounds
+    }
+    var roomID: String
+    var roomName: String
+    var revision: String
+    let source: String
+    let units: String
+    let coordinateSystem: String
+    let selectedObjectID: String?
+    let objects: [Element]
+    let structures: [Element]
+
+    func validate() throws {
+        guard units == "meters", coordinateSystem == "right-handed-y-up",
+              ["scan_editor", "sample_editor"].contains(source),
+              objects.count <= 100, structures.count <= 500 else { throw RoomLibraryError.invalidLayout }
+        var ids = Set<String>()
+        for item in objects + structures {
+            let triples = [item.dimensionsMeters, item.centerMeters, item.boundsMeters.min, item.boundsMeters.max] + item.worldCornersMeters
+            guard !item.id.isEmpty, item.id.count <= 160, ids.insert(item.id).inserted,
+                  item.worldCornersMeters.count == 8,
+                  triples.allSatisfy({ $0.count == 3 && $0.allSatisfy { $0.isFinite && abs($0) < 10_000 } }),
+                  item.dimensionsMeters.allSatisfy({ $0 >= 0 }),
+                  zip(item.boundsMeters.min, item.boundsMeters.max).allSatisfy({ $0 <= $1 }),
+                  item.yawRadians?.isFinite != false else { throw RoomLibraryError.invalidLayout }
+        }
+        if let selectedObjectID, !objects.contains(where: { $0.id == selectedObjectID }) {
+            throw RoomLibraryError.invalidLayout
+        }
+    }
+
+    var promptText: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard (try? validate()) != nil, let data = try? encoder.encode(self) else { return "Room geometry unavailable." }
+        return String(decoding: data, as: UTF8.self)
+    }
+}
