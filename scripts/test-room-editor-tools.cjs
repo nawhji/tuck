@@ -9,7 +9,7 @@ const html = fs.readFileSync(path.join(root, 'Tuck/Resources/DemoRoom.html'), 'u
 const dataScript = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const editorScript = '';
 
-function roomContext() {
+function roomContext(width=390,height=310) {
   const ids = new Map(), events = [], draws = [];
   let constant = 100, boundBuffer, nextID = 0;
   const constants = new Map(), pointers = new Map(), enabled = new Set();
@@ -44,7 +44,7 @@ function roomContext() {
   class Element {
     constructor(tag) {
       this.tagName = tag; this.children = []; this.listeners = {}; this.style = {};
-      this.value = ''; this.hidden = false; this.clientWidth = 390; this.clientHeight = 310;
+      this.value = ''; this.hidden = false; this.clientWidth = width; this.clientHeight = height; this.attributes={}; this.innerHTML="";
       this.classList = {toggle() {}};
     }
     set id(value) { this._id = value; ids.set(value, this); }
@@ -52,15 +52,15 @@ function roomContext() {
     append(...children) { this.children.push(...children); }
     add(value) { this.children.push(value); }
     replaceChildren(...children) { this.children = children; }
-    setAttribute() {} remove() { this.removed = true; } click() { this.onclick?.(); }
+    setAttribute(key,value) { this.attributes[key]=String(value); } removeAttribute(key) { delete this.attributes[key]; } remove() { this.removed = true; } click() { this.onclick?.(); }
     addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
     getContext() { return gl; }
-    getBoundingClientRect() { return {left: 0, top: 0, width: 390, height: 310}; }
+    getBoundingClientRect() { return {left: 0, top: 0, width, height}; }
     setPointerCapture() {} blur() { document.activeElement = null; }
   }
   const document = {head: new Element('head'), body: new Element('body'), activeElement: null,
     createElement: tag => new Element(tag), getElementById: id => ids.get(id) || null};
-  for (const id of ['c', 'chatHandle', 'axisIndicator', 'rotationHUD', 'rotateLeft', 'rotateRight', 'roomScale', 'roomScaleBar', 'roomScaleLabel']) { const el = new Element(id === 'c' ? 'canvas' : 'div'); el.id = id; }
+  for (const id of ['c', 'chatHandle', 'axisIndicator', 'rotationHUD', 'rotateLeft', 'rotateRight', 'furnitureDimensions']) { const el = new Element(id === 'c' ? 'canvas' : 'div'); el.id = id; }
   class Image {
     constructor() { this.width = this.height = 2; }
     set src(value) { queueMicrotask(() => value.startsWith('data:image/') ? this.onload() : this.onerror()); }
@@ -69,7 +69,7 @@ function roomContext() {
     Option: function(text, value) { this.text = text; this.value = value; },
     Float32Array, Uint8Array, Map, Set, Math, Number, Array, Error, Promise,
     atob: value => Buffer.from(value, 'base64').toString('binary'),
-    innerWidth: 390, innerHeight: 310, devicePixelRatio: 1,
+    innerWidth: width, innerHeight: height, devicePixelRatio: 1,
     requestAnimationFrame: callback => { context.nextFrame = callback; },
     addEventListener() {}, setTimeout, clearTimeout,
     webkit: {messageHandlers: {furniture: {postMessage: value => events.push(JSON.parse(JSON.stringify(value)))},
@@ -102,69 +102,64 @@ function fixture(id) {
 
 
 const clean=v=>JSON.parse(JSON.stringify(v));
-const a=roomContext(),editor=a.editor,run=s=>vm.runInContext(s,a.context);
-const sample=clean(editor.layout());
-run(`const sampleParts=activeRoomParts;activeRoomParts=[];assetMap.set('test',{label:'Test',parts:[{vertices:[[-.2,0,-.2],[.2,.4,.2]],faces:[]}],objects:[]});`);
-const setup=()=>run(`items=[{instanceId:'a',assetId:'test',position:[0,0,0],yawRadians:0},{instanceId:'b',assetId:'test',position:[0,0,0],yawRadians:0},{instanceId:'c',assetId:'test',position:[5,0,0],yawRadians:0},{instanceId:'d',assetId:'test',position:[5,0,0],yawRadians:0}];sync()`);
-setup();assert.deepEqual(clean(editor.overlapState()).sort(),['a','b','c','d'],'all independent collision groups are red');
-editor.setFurnitureMoveEnabled(false);editor.select(null);assert.deepEqual(clean(editor.overlapState()).sort(),['a','b','c','d'],'red persists after mode off/deselection');
-editor.setTransform('a',[-5,0,0],0);assert.deepEqual(clean(editor.overlapState()).sort(),['c','d'],'moving clear updates only that overlap');
-editor.setTransform('c',[0,0,0],0);assert.deepEqual(clean(editor.overlapState()).sort(),['b','c'],'new group is red while previous pair clears');
-editor.setTransform('d',[0,0,0],0);assert.deepEqual(clean(editor.overlapState()).sort(),['b','c','d'],'every member in a connected collision group is red');
-editor.setTransform('c',[5,0,0],0);editor.setTransform('d',[-7,0,0],0);assert.deepEqual(clean(editor.overlapState()),[],'moving clear removes red');
-// Rotation-aware collision: thin parallel diagonal boxes can have intersecting AABBs without a real overlap.
-const box=(c,yaw=0)=>({center:c,half:[1,.5,.1],axes:[[Math.cos(yaw),0,-Math.sin(yaw)],[0,1,0],[Math.sin(yaw),0,Math.cos(yaw)]]});
-assert(!editor.boxesOverlap(box([0,.5,0],Math.PI/4),box([.3,.5,.3],Math.PI/4)));
-assert(editor.boxesOverlap(box([0,.5,0]),box([0,.5,0],Math.PI/2)));
-// A finite wall volume and a normal floor: flush contact is valid, penetration is red.
-run(`activeRoomParts=[boxPart('Wall',[2,1,0],[.1,2,2],[.9,.9,.9]),boxPart('Floor',[0,-.025,0],[6,.05,6],[.7,.7,.7])];snapSurfaceCache=null;wallCollisionCache=null;items=[{instanceId:'a',assetId:'test',position:[1.75,0,0],yawRadians:0}];sync()`);
-assert.deepEqual(clean(editor.overlapState()),[],'flush wall contact is allowed');
-editor.setTransform('a',[1.77,0,0],0);assert.deepEqual(clean(editor.overlapState()),['a'],'actual wall penetration is red');
-editor.setTransform('a',[3,0,0],0);assert.deepEqual(clean(editor.overlapState()),[],'finite wall only, no infinite-plane warning');
-editor.setTransform('a',[0,-.04,0],0);assert.deepEqual(clean(editor.overlapState()),[],'floor is not a red-warning collider');
-let moved={instanceId:'a',assetId:'test',position:[1.72,0,0],yawRadians:0};
-assert.notEqual(editor.snapToStructure(moved,0,[1.6,0,0]),null);assert(Math.abs(moved.position[0]-1.75)<1e-8);
-assert(!editor.overlapsWall(editor.furnitureBox(moved)),'magnetic flush contact is not red');
-moved={...moved,position:[1.6,0,0]};assert.equal(editor.snapToStructure(moved,0),null,'dragging beyond 6.5 cm releases snap');
-moved={...moved,position:[0,.04,0]};editor.snapToStructure(moved,1);assert(Math.abs(moved.position[1])<1e-8);assert.equal(moved.position[0],0);
-// A tiny item contained fully within wall thickness must also count as penetrating.
-run(`assetMap.set('tiny',{parts:[{vertices:[[-.01,0,-.01],[.01,.02,.01]],faces:[]}],objects:[]})`);
-assert(editor.overlapsWall(editor.furnitureBox({assetId:'tiny',position:[2,.5,0],yawRadians:0})));
-run(`activeRoomParts=[boxPart('Wall',[2,1,-.75],[.1,2,.5],[1,1,1]),boxPart('Wall',[2,1,.75],[.1,2,.5],[1,1,1])];snapSurfaceCache=null;wallCollisionCache=null`);
-assert(!editor.overlapsWall(editor.furnitureBox({assetId:'test',position:[2,0,0],yawRadians:0})),'doorway gap is not a wall');
-moved={assetId:'test',position:[1.72,0,0],yawRadians:0};assert.equal(editor.snapToStructure(moved,0),null,'doorway is not magnetic');
-run('activeRoomParts=[];snapSurfaceCache=null');moved={assetId:'test',position:[.04,0,0],yawRadians:0};assert.equal(editor.snapToStructure(moved,0),null,'other furniture is never magnetic');
-run('activeRoomParts=sampleParts;');editor.loadLayout(sample);
-// The scale bar is a 1/2/5 × 10^n inch reference at the floor center, in CSS pixels.
-for(const yaw of [-.72,.9,2.2]){
- let previous=0;
- for(const radius of [3.4,7.5,15]){
-  editor.setCamera(yaw,.62,radius);const scale=clean(editor.floorScale());
-  assert(scale&&Number.isFinite(scale.inches)&&scale.inches>0);
-  const power=10**Math.floor(Math.log10(scale.inches)),mantissa=scale.inches/power;
-  assert([1,2,5].some(v=>Math.abs(v-mantissa)<1e-8));
-  assert(scale.pixels>=39.99&&scale.pixels<=100.01,'readable screen-sized bar');
-  assert(Math.abs(scale.pixels-scale.pixelsPerInch*scale.inches)<1e-8);
-  assert(scale.inches>=previous,'zooming out shows a larger physical reference');previous=scale.inches;
-  a.frame();assert.equal(a.ids.get('roomScaleLabel').textContent,scale.label);
+function checkBounds(editor){
+ const safe=editor.dimensionSafeRect();
+ for(const d of editor.dimensionAnnotations()){
+  assert(d.fontSize>=8&&d.fontSize<=13);assert(d.strokeWidth>=.5&&d.strokeWidth<=1.2);
+  assert(d.box.left>=safe.left-1e-6&&d.box.right<=safe.right+1e-6);
+  assert(d.box.top>=safe.top-1e-6&&d.box.bottom<=safe.bottom+1e-6);
+  const angle=Math.atan2(d.b[1]-d.a[1],d.b[0]-d.a[0])*180/Math.PI;
+  assert(Math.abs(Math.sin((angle-d.angle)*Math.PI/180))<1e-7,'number rotation follows its dimension line');
+  assert(/^\d+\.\d+″$/.test(d.label),'plain inch number, no axis prefix');
  }
 }
 (async()=>{
+ const a=roomContext(),editor=a.editor;
+ const sample=clean(editor.layout());assert.equal(sample.items.length,6);
+ assert(!sample.items.some(i=>i.assetId==='window_curtains'));
+ assert(!editor.assets.some(i=>i.id==='window_curtains'));
+ assert(editor.room.parts.some(p=>p.fixedCurtain),'curtain geometry is in permanent room structure');
+ const curtainCount=editor.room.parts.filter(p=>p.fixedCurtain).length;
+ const legacy={...sample,items:[...sample.items,{instanceId:'old-curtain',assetId:'window_curtains',position:[42,0,42],yawRadians:1}]};
+ editor.loadLayout(legacy);assert.deepEqual(clean(editor.layout()),sample,'old movable curtains are migrated out');
+ editor.loadLayout(sample);assert.equal(editor.room.parts.filter(p=>p.fixedCurtain).length,curtainCount,'fixed curtains never duplicate or disappear');
+ const chat=editor.chatContext();assert(!chat.objects.some(o=>o.category==='window_curtains'));
+ assert.deepEqual(clean(editor.dimensionAnnotations()),[],'dimensions default OFF');
+ editor.setInchesEnabled(true);assert.equal(editor.dimensionAnnotations().length,18,'six furniture pieces each have three dimensions');checkBounds(editor);
+ a.frame();const overlay=a.ids.get('furnitureDimensions');assert(overlay.innerHTML.includes('<path')&&overlay.innerHTML.includes('<text'));
+ assert(!overlay.innerHTML.includes('<rect')&&!overlay.innerHTML.includes('foreignObject'),'no text boxes');
+ assert(!html.includes('roomScale')&&!html.includes('overlapHighlight')&&!html.includes('overlap?'),'old scale and red renderer are removed');
+ editor.setInchesEnabled(false);a.frame();assert.equal(overlay.innerHTML,'');assert('hidden' in overlay.attributes);
+ const poses=[{w:390,h:397,insets:[12,12,12,12]},{w:390,h:844,insets:[112,12,126,12]},{w:430,h:932,insets:[123,12,136,12]},{w:320,h:568,insets:[100,12,116,12]},{w:844,h:390,insets:[72,12,100,12]}];
+ for(const p of poses){
+  const scene=roomContext(p.w,p.h);scene.editor.setInchesEnabled(true);scene.editor.setDimensionInsets(...p.insets);
+  for(const yaw of[-.9,.9,2.1])for(const radius of[3.4,7.5,15]){
+   scene.editor.setCamera(yaw,.62,radius);checkBounds(scene.editor);scene.frame();
+   assert(!scene.ids.get('furnitureDimensions').innerHTML.includes('NaN'));
+  }
+  const before=clean(scene.editor.layout());scene.editor.setInchesEnabled(false);assert.deepEqual(clean(scene.editor.layout()),before,'toggle never moves furniture');
+ }
+ // Perspective scales with actual projected depth and zoom, within readability limits.
+ const eye=vm.runInContext('camera()',a.context),forward=vm.runInContext('norm(sub(sceneTarget,camera()))',a.context);
+ const near=editor.dimensionStyle(eye.map((v,k)=>v+forward[k]*3)),far=editor.dimensionStyle(eye.map((v,k)=>v+forward[k]*15));
+ assert(near.fontSize>far.fontSize&&near.strokeWidth>far.strokeWidth);
+ assert.throws(()=>editor.setDimensionInsets(NaN,0,0,0),/Invalid dimension/);
+ editor.setDimensionInsets(1000,12,1000,12);editor.setInchesEnabled(true);assert.deepEqual(clean(editor.dimensionAnnotations()),[],'covered view does not leak markers offscreen');
+ editor.setDimensionInsets(12,12,12,12);
+ // Products added with Try get the same three dimensions, while Reset keeps camera and toggle state.
  await a.api.register(fixture('sofa_007_brown'));a.api.add('sofa_007_brown');
- const saved=clean(editor.layout()),bed=saved.items.find(i=>i.assetId==='bed');
+ assert.equal(editor.dimensionAnnotations().filter(d=>d.id==='product:sofa_007_brown').length,3);
+ const saved=clean(editor.layout());const bed=saved.items.find(i=>i.assetId==='bed');
  editor.setTransform(bed.instanceId,[.8,.6,.3],1.1);a.api.remove('sofa_007_brown');
- editor.setFurnitureMoveEnabled(true);editor.select(bed.instanceId);editor.setCamera(.8,.72,4.8);
- const camera=clean(editor.interactionState().camera);
- editor.restoreSavedLayout(saved);
- assert.deepEqual(clean(editor.layout()),saved,'Reset restores saved furniture including products');
- assert.deepEqual(clean(editor.interactionState().camera),camera,'Reset preserves viewpoint');
+ editor.setFurnitureMoveEnabled(true);editor.select(bed.instanceId);editor.setCamera(.8,.72,4.8);const camera=clean(editor.interactionState().camera);
+ editor.restoreSavedLayout(saved);assert.deepEqual(clean(editor.layout()),saved);assert.deepEqual(clean(editor.interactionState().camera),camera);
  assert.equal(editor.interactionState().selected,null);assert.equal(editor.interactionState().furnitureMoveEnabled,false);
- // Fresh scans also keep their viewpoint when resetting (loadScannedRoom normally resets it).
- const matrix=(x,y,z)=>[1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1];
- const scan={schemaVersion:1,id:'scan',units:'meters',coordinateSystem:'right-handed-y-up',transformLayout:'column-major',walls:[{id:'wall',kind:'wall',transform:matrix(0,1,-2),dimensions:{width:4,height:2,depth:0}}],doors:[],windows:[],openings:[],floors:[],objects:[{id:'chair',category:'chair',transform:matrix(0,.5,0),dimensions:{width:.6,height:1,depth:.6}}]};
- editor.loadScannedRoom(scan);const scanned=clean(editor.layout());editor.setCamera(1,.9,5);
- const before=clean(editor.interactionState().camera);editor.restoreSavedLayout(scanned);
- assert.deepEqual(clean(editor.interactionState().camera),before);
- assert.deepEqual(clean(editor.layout()),scanned);
- console.log('PASS: all overlapping groups red after deselection; furniture SAT; finite wall penetration vs flush/floor/doorway; contained-wall collision; structural-only snapping; 1/2/5 inch scale across zoom and orbit; saved/product/scan Reset preserving camera.');
+ assert(editor.dimensionAnnotations().length>0,'inch toggle persists across Reset');
+ // Existing structural snapping remains; fixed curtains are never magnetic.
+ vm.runInContext(`const originalParts=activeRoomParts;activeRoomParts=[{...room.parts.find(p=>p.fixedCurtain),name:'Wall curtain',fixedCurtain:true}];snapSurfaceCache=null`,a.context);
+ assert.equal(editor.snapSurfaces().length,0);
+ vm.runInContext(`activeRoomParts=[boxPart('Wall',[2,1,0],[.1,2,2],[1,1,1]),boxPart('Floor',[0,-.025,0],[6,.05,6],[1,1,1])];snapSurfaceCache=null;assetMap.set('test',{parts:[{vertices:[[-.2,0,-.2],[.2,.4,.2]],faces:[]}],objects:[]})`,a.context);
+ let item={assetId:'test',position:[1.72,0,0],yawRadians:0};editor.snapToStructure(item,0,[1.6,0,0]);assert(Math.abs(item.position[0]-1.75)<1e-8);
+ item={...item,position:[0,.04,0]};editor.snapToStructure(item,1);assert(Math.abs(item.position[1])<1e-8);
+ console.log('PASS: inch OFF/ON; six static-curtain-free furniture pieces; legacy migration; angled number-only labels; perspective bounds; viewport/sheet/zoom/orbit containment; Try dimensions; Reset preserving camera; structural-only snapping; red and old scale removed.');
 })().catch(error=>{console.error(error);process.exit(1)});

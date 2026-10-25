@@ -8,6 +8,8 @@ struct RoomStageView: View {
     var viewportSize: CGSize? = nil
     var previewController: RoomPreviewController? = nil
     var moveEnabled = false
+    var inchesEnabled = false
+    var dimensionInsets = EdgeInsets()
     var initialLayout: RoomLayoutSnapshot? = nil
     var scannedRoom: RoomDocument? = nil
     @StateObject private var fallbackController = RoomPreviewController()
@@ -16,7 +18,7 @@ struct RoomStageView: View {
         if hasScannedSpace {
             ZStack(alignment: .bottom) {
                 DemoRoomPreview(controller: previewController ?? fallbackController,
-                                initialLayout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
+                                initialLayout: initialLayout, moveEnabled: moveEnabled, inchesEnabled: inchesEnabled, dimensionInsets: dimensionInsets, scannedRoom: scannedRoom)
                     .accessibilityLabel(moveEnabled ? "Room. Drag furniture to move along one axis." : "Room. Drag to rotate. Pinch to zoom.")
                 if let onViewScan {
                     Button("View measurements", action: onViewScan)
@@ -46,6 +48,8 @@ private struct DemoRoomPreview: View {
     let controller: RoomPreviewController
     let initialLayout: RoomLayoutSnapshot?
     let moveEnabled: Bool
+    let inchesEnabled: Bool
+    let dimensionInsets: EdgeInsets
     let scannedRoom: RoomDocument?
     @State private var failed = false
     @State private var isLoading = true
@@ -60,7 +64,7 @@ private struct DemoRoomPreview: View {
                 }
             } else {
                 DemoRoomWebView(controller: controller, initialLayout: initialLayout,
-                                moveEnabled: moveEnabled, scannedRoom: scannedRoom,
+                                moveEnabled: moveEnabled, inchesEnabled: inchesEnabled, dimensionInsets: dimensionInsets, scannedRoom: scannedRoom,
                                 onReady: { isLoading = false }, onFailure: { failed = true })
                     .opacity(isLoading ? 0 : 1)
                     .allowsHitTesting(!isLoading)
@@ -86,6 +90,8 @@ private struct DemoRoomWebView: UIViewRepresentable {
     let controller: RoomPreviewController
     let initialLayout: RoomLayoutSnapshot?
     let moveEnabled: Bool
+    let inchesEnabled: Bool
+    let dimensionInsets: EdgeInsets
     let scannedRoom: RoomDocument?
     let onReady: () -> Void
     let onFailure: () -> Void
@@ -104,6 +110,7 @@ private struct DemoRoomWebView: UIViewRepresentable {
         view.scrollView.contentInsetAdjustmentBehavior = .never
         view.allowsLinkPreview = false
         controller.attach(view, layout: initialLayout, moveEnabled: moveEnabled, scannedRoom: scannedRoom)
+        controller.setDimensionOptions(enabled: inchesEnabled, insets: dimensionInsets)
         guard let url = Bundle.main.url(forResource: "DemoRoom", withExtension: "html") else {
             DispatchQueue.main.async(execute: onFailure)
             return view
@@ -114,6 +121,7 @@ private struct DemoRoomWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         controller.setMoveEnabled(moveEnabled)
+        controller.setDimensionOptions(enabled: inchesEnabled, insets: dimensionInsets)
     }
 
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {

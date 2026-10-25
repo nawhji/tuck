@@ -10,12 +10,16 @@ final class RoomPreviewController: ObservableObject {
     private weak var webView: WKWebView?
     private var isReady = false
     private var moveEnabled = false
+    private var inchesEnabled = false
+    private var dimensionInsets = EdgeInsets()
+    private var dimensionTask: Task<Void, Never>?
     private var initialLayout: RoomLayoutSnapshot?
     private var scannedRoom: RoomDocument?
     private var initialSnapshot: RoomLayoutSnapshot?
 
     func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool, scannedRoom: RoomDocument? = nil) {
         generation = UUID()
+        dimensionTask?.cancel()
         isResetting = false
         webView = view
         isReady = false
@@ -30,6 +34,7 @@ final class RoomPreviewController: ObservableObject {
         guard webView === view else { return }
         webView = nil
         generation = UUID()
+        dimensionTask?.cancel()
         isResetting = false
         pendingProducts.removeAll()
         isReady = false
@@ -56,6 +61,7 @@ final class RoomPreviewController: ObservableObject {
         try check(view, token)
         isReady = true
         try await applyMoveMode()
+        try await applyDimensionOptions(in: view, token: token)
         initialSnapshot = try await snapshot()
     }
 
@@ -102,6 +108,30 @@ final class RoomPreviewController: ObservableObject {
         moveEnabled = enabled
         guard isReady else { return }
         Task { try? await applyMoveMode() }
+    }
+
+    func setDimensionOptions(enabled: Bool, insets: EdgeInsets) {
+        guard inchesEnabled != enabled || dimensionInsets != insets else { return }
+        inchesEnabled = enabled
+        dimensionInsets = insets
+        guard isReady, let view = webView else { return }
+        dimensionTask?.cancel()
+        let token = generation
+        dimensionTask = Task { [weak self] in
+            guard let self else { return }
+            do { try await self.applyDimensionOptions(in: view, token: token) }
+            catch is CancellationError {}
+            catch { print("Dimension overlay: \(error.localizedDescription)") }
+        }
+    }
+
+    private func applyDimensionOptions(in view: WKWebView, token: UUID) async throws {
+        try check(view, token)
+        let insets = dimensionInsets
+        _ = try await view.callAsyncJavaScript("window.tuckEditor.setDimensionInsets(top, right, bottom, left); window.tuckEditor.setInchesEnabled(enabled); return true;",
+            arguments: ["enabled": inchesEnabled, "top": Double(insets.top), "right": Double(insets.trailing),
+                        "bottom": Double(insets.bottom), "left": Double(insets.leading)], in: nil, contentWorld: .page)
+        try check(view, token)
     }
 
     private func applyMoveMode() async throws {

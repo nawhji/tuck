@@ -9,6 +9,7 @@ struct HomeView: View {
     @GestureState private var dragOffset: CGFloat = 0
     @FocusState private var isInputFocused: Bool
     @State private var moveEnabled = false
+    @State private var inchesEnabled = false
     @State private var moveNotice: String?
     @State private var noticeTask: Task<Void, Never>?
     @State private var showLeaveDialog = false
@@ -114,6 +115,7 @@ struct HomeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { model.persistChat() }
         }
+        .onChange(of: model.sceneID) { _, _ in inchesEnabled = false }
         .onDisappear { noticeTask?.cancel(); model.persistChat() }
     }
 
@@ -131,13 +133,17 @@ struct HomeView: View {
         let top = CGFloat(model.hasScannedSpace ? 84 : 55) * (1 - expansion) - geometry.safeAreaInsets.top * expansion
         let bottom = (geometry.size.height - sheetHeight - 54) * (1 - expansion) + (geometry.size.height + geometry.safeAreaInsets.bottom) * expansion
         let viewport = CGSize(width: geometry.size.width, height: max(160, bottom - top))
+        let toolsVisible = !isInputFocused && sheetHeight <= collapsed + 16
+        let dimensionsBottom = geometry.size.height - sheetHeight - (toolsVisible ? 66 : 12)
+        let dimensionInsets = EdgeInsets(top: max(12, 64 - top), leading: 12,
+                                        bottom: max(model.savedScan == nil ? 12 : 44, top + viewport.height - dimensionsBottom), trailing: 12)
         return ZStack(alignment: .topLeading) {
             RoomStageView(hasScannedSpace: model.hasScannedSpace,
                           onScanTap: requestScan,
                           onViewScan: model.savedScan == nil ? nil : { showsSavedRoom = true },
                           viewportSize: viewport,
                           previewController: preview,
-                          moveEnabled: moveEnabled,
+                          moveEnabled: moveEnabled, inchesEnabled: inchesEnabled, dimensionInsets: dimensionInsets,
                           initialLayout: model.activeLayout,
                           scannedRoom: model.activeLayout == nil ? model.savedScan?.document : model.activeLayout?.scannedRoom)
                 .id(model.sceneID)
@@ -173,6 +179,7 @@ struct HomeView: View {
                 HStack(spacing: 10) {
                     if model.hasScannedSpace {
                         resetButton
+                        inchButton
                         moveButton
                     }
                     cameraButton
@@ -215,6 +222,19 @@ struct HomeView: View {
                 if model.sceneID == scene { saveError = error.localizedDescription }
             }
         }
+    }
+
+    private var inchButton: some View {
+        Button { inchesEnabled.toggle() } label: {
+            Text("inch")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 15).frame(height: 42)
+                .background(inchesEnabled ? Color("TuckBrown") : Color(.systemGray3), in: Capsule())
+        }
+        .disabled(isLoadingRooms || isSavingRoom || isResettingRoom)
+        .accessibilityLabel("Furniture dimensions in inches")
+        .accessibilityValue(inchesEnabled ? "On" : "Off")
     }
 
     private var resetButton: some View {

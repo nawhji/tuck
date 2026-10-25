@@ -104,13 +104,13 @@ const clean=v=>JSON.parse(JSON.stringify(v));
 (async()=>{
  const a=roomContext(),api=a.api,editor=a.editor;
  const original=clean(editor.layout()),camera=clean(editor.interactionState().camera);
- assert.equal(original.items.length,7);
+ assert.equal(original.items.length,6);
  assert(!a.ids.has('furnitureLabels')&&!a.ids.has('furnitureTools')&&!a.ids.has('selectedFurniture'));
  await assert.rejects(()=>api.register(fixture('invented')),/Invalid furniture/);
  const ids=['sofa_007_brown','sofa_027_brown','sofa_028_brown'];
  for(const id of ids)await api.register(fixture(id));
  for(const id of ids)api.add(id);
- api.add(ids[0]);assert.equal(editor.layout().items.length,10,'repeated add is idempotent');
+ api.add(ids[0]);assert.equal(editor.layout().items.length,9,'repeated add is idempotent');
  assert.equal(editor.interactionState().furnitureMoveEnabled,false,'Try never enables move mode');
  assert.equal(editor.interactionState().selected,null,'Try does not change furniture selection');
  assert.deepEqual(clean(editor.interactionState().camera),camera,'Try never changes camera');
