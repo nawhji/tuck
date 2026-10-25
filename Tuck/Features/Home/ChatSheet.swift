@@ -12,6 +12,7 @@ struct ChatSheet<Drag: Gesture>: View {
     let onSend: () -> Void
     let onImage: () -> Void
     let onSelect: (Product) -> Void
+    let onOrder: (CheckoutCard) -> Void
 
     var isMinimized = false
     var onExpand: () -> Void = {}
@@ -29,7 +30,7 @@ struct ChatSheet<Drag: Gesture>: View {
                 GeometryReader { viewport in
                     ScrollViewReader { scroll in
                         ScrollView {
-                            LazyVStack(spacing: 16) {
+                            VStack(spacing: 16) {
                                 ForEach(messages.prefix(tailStart)) { message in
                                     messageView(message).id(message.id)
                                 }
@@ -118,7 +119,7 @@ struct ChatSheet<Drag: Gesture>: View {
                     }
                 }
                 .padding(.horizontal, 26)
-                ForEach(Array(message.blocks.enumerated()), id: \.offset) { _, block in
+                ForEach(Array((message.blocks + message.trailing).enumerated()), id: \.offset) { _, block in
                     switch block {
                     case .text(let text):
                         AssistantText(text: text)
@@ -128,6 +129,8 @@ struct ChatSheet<Drag: Gesture>: View {
                                 onSelect(product)
                             }
                         }
+                    case .checkout(let card):
+                        CheckoutCardView(card: card) { onOrder(card) }
                     }
                 }
             }

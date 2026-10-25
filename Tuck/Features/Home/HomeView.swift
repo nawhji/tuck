@@ -24,23 +24,27 @@ struct HomeView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                Color.white.ignoresSafeArea()
-                stage(in: geometry)
-                sheetLayer(in: geometry)
+        NavigationStack {
+            GeometryReader { geometry in
+                ZStack(alignment: .top) {
+                    Color.white.ignoresSafeArea()
+                    stage(in: geometry)
+                    sheetLayer(in: geometry)
+                }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $model.isProfilePresented) {
+                ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites, orders: model.orders, onOpenRoom: { entry in
+                    moveEnabled = false
+                    preview.setMoveEnabled(false)
+                    model.openSavedRoom(entry)
+                })
             }
         }
+        .tint(Color("TuckBrown"))
         .animation(.spring(duration: 0.35), value: isInputFocused)
         .preferredColorScheme(.light)
         .environment(favorites)
-        .sheet(isPresented: $model.isProfilePresented) {
-            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites, onOpenRoom: { entry in
-                moveEnabled = false
-                preview.setMoveEnabled(false)
-                model.openSavedRoom(entry)
-            })
-        }
         .onChange(of: model.isProfilePresented) { _, presented in
             if presented { isInputFocused = false }
         }
@@ -172,6 +176,7 @@ struct HomeView: View {
                 isInputFocused: $isInputFocused, canSend: model.canSend,
                 dragGesture: sheetDrag(availableHeight: geometry.size.height),
                 onSend: model.send, onImage: model.attachImage, onSelect: model.toggleSelection,
+                onOrder: model.placeOrder,
                 isMinimized: sheetHeight < 90,
                 onExpand: { withAnimation(.spring(duration: 0.35)) { model.sheetDetent = .collapsed } }
             )

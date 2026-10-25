@@ -11,3 +11,6 @@ xcuserdata/
 
 # Secrets (API keys) — Secrets.swift.example 을 복사해 만든다
 Tuck/Services/Secrets.swift
+
+# 로컬 비밀 값
+.env

@@ -26,6 +26,22 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Tuck uses the camera to scan your room and measure walls and furniture.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.hackathon.tuck</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tuck</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

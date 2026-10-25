@@ -5,7 +5,7 @@ import SwiftUI
 struct ProductCardView: View {
     let product: Product
     let isSelected: Bool
-    let onToggle: () -> Void
+    var onToggle: (() -> Void)? = nil
     @Environment(FavoritesStore.self) private var favorites
     private var isLiked: Bool { favorites.contains(product.id) }
 
@@ -26,7 +26,7 @@ struct ProductCardView: View {
                     .lineLimit(1)
                 keywordGrid
                 Spacer(minLength: 0)
-                tryButton
+                if let onToggle { tryButton(onToggle) }
             }
             .padding(.leading, 16)
             .padding(.trailing, 12)
@@ -43,7 +43,7 @@ struct ProductCardView: View {
         .padding(.horizontal, 19)
     }
 
-    private var tryButton: some View {
+    private func tryButton(_ onToggle: @escaping () -> Void) -> some View {
         Button(action: onToggle) {
             Text(isSelected ? "Remove" : "Try")
                 .font(.system(size: 13, weight: .medium))

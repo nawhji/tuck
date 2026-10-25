@@ -44,6 +44,25 @@ struct ClaudeClient {
             `#### ` for a short heading (H4 only) and use **bold** for the few key words a reader should catch \
             (a size, a material, a verdict) and *italic* for light emphasis. Use them sparingly; \
             do not use other heading levels, bullet lists, tables, code blocks or links.
+
+            # Buying
+            The user does not need to place a product (tap Try) before buying. When the user clearly asks to buy or \
+            order something, work out which catalog product they mean: the one they refer to ("buy this", "the second \
+            one", a product you just recommended), the product placed in the room (the "[app context ...]" note at the \
+            end of a user message names it), or, if they describe conditions ("the cheapest white sofa under $300"), \
+            the best match from the CATALOG. Do not discuss price, shipping, tax, delivery address or payment: the app \
+            prices the order from trusted store data, shows the summary and runs checkout. Reply with one short \
+            sentence and this block:
+
+            ```tuck-buy
+            {"product_id":"sofa_028_brown","quantity":1,"budget_usd":200}
+            ```
+
+            `product_id` must be an id from the CATALOG. `quantity` defaults to 1. Leave out `budget_usd` when the user \
+            gave no budget. If you cannot tell which product they mean, ask a short question instead of outputting the \
+            block. Never ask for, repeat or store card numbers, CVC codes or addresses; if the user shares any, tell \
+            them to use the secure payment sheet instead. Only output a `tuck-buy` block when the user clearly wants \
+            to purchase, never to suggest it.
             """
         guard let catalog else { return base }
         return base + """
