@@ -13,6 +13,9 @@ struct ChatSheet<Drag: Gesture>: View {
     let onImage: () -> Void
     let onSelect: (Product) -> Void
 
+    var isMinimized = false
+    var onExpand: () -> Void = {}
+
     @State private var tailHeight: CGFloat = 0
 
     private var tailStart: Int {
@@ -22,53 +25,55 @@ struct ChatSheet<Drag: Gesture>: View {
     var body: some View {
         VStack(spacing: 0) {
             grabber
-            GeometryReader { viewport in
-                ScrollViewReader { scroll in
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(messages.prefix(tailStart)) { message in
-                                messageView(message).id(message.id)
-                            }
-                            // 마지막 질문과 그 답변: 높이를 재서 남는 만큼만 아래 여백으로 채운다.
-                            VStack(spacing: 16) {
-                                ForEach(messages.dropFirst(tailStart)) { message in
+            if !isMinimized {
+                GeometryReader { viewport in
+                    ScrollViewReader { scroll in
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
+                                ForEach(messages.prefix(tailStart)) { message in
                                     messageView(message).id(message.id)
                                 }
+                                // 마지막 질문과 그 답변: 높이를 재서 남는 만큼만 아래 여백으로 채운다.
+                                VStack(spacing: 16) {
+                                    ForEach(messages.dropFirst(tailStart)) { message in
+                                        messageView(message).id(message.id)
+                                    }
+                                }
+                                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tailHeight = $0 }
+                                // 답변이 짧아도 질문을 맨 위로 올릴 수 있도록, 마지막 질문 이후 내용 높이를 뺀 만큼만 여백을 둔다.
+                                Color.clear.frame(height: max(viewport.size.height - tailHeight - 16, 0))
                             }
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tailHeight = $0 }
-                            // 답변이 짧아도 질문을 맨 위로 올릴 수 있도록, 마지막 질문 이후 내용 높이를 뺀 만큼만 여백을 둔다.
-                            Color.clear.frame(height: max(viewport.size.height - tailHeight - 16, 0))
+                            .padding(.vertical, 16)
                         }
-                        .padding(.vertical, 16)
-                    }
-                    .scrollDismissesKeyboard(.interactively)
-                    // 질문을 보내면 그 질문이 시트 상단에 보이도록 맞추고, 스트리밍 중에는 따라가지 않는다.
-                    .onChange(of: messages.count) {
-                        guard let question = messages.last(where: { $0.role == .user }) else { return }
-                        withAnimation { scroll.scrollTo(question.id, anchor: .top) }
+                        .scrollDismissesKeyboard(.interactively)
+                        // 질문을 보내면 그 질문이 시트 상단에 보이도록 맞추고, 스트리밍 중에는 따라가지 않는다.
+                        .onChange(of: messages.count) {
+                            guard let question = messages.last(where: { $0.role == .user }) else { return }
+                            withAnimation { scroll.scrollTo(question.id, anchor: .top) }
+                        }
                     }
                 }
+                ChatInputBar(
+                    text: $draft,
+                    isFocused: isInputFocused,
+                    canSend: canSend,
+                    onSend: onSend,
+                    onImage: onImage
+                )
+                .padding(.bottom, 8)
             }
-            ChatInputBar(
-                text: $draft,
-                isFocused: isInputFocused,
-                canSend: canSend,
-                onSend: onSend,
-                onImage: onImage
-            )
-            .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)
         .background(alignment: .top) {
             ZStack(alignment: .top) {
                 UnevenRoundedRectangle(topLeadingRadius: 31, topTrailingRadius: 31)
-                    .fill(Color("TuckSheet"))
+                    .fill(Color.white)
                     .shadow(color: .black.opacity(0.12), radius: 10, y: 8)
-                Color("TuckSheet").padding(.top, 31)
+                Color.white.padding(.top, 31)
             }
             // 홈 인디케이터 영역까지 시트 색을 이어 붙이고, 하단 그림자를 덮는다.
             .overlay(alignment: .bottom) {
-                Color("TuckSheet")
+                Color.white
                     .frame(height: 120)
                     .offset(y: 120)
             }
@@ -80,15 +85,21 @@ struct ChatSheet<Drag: Gesture>: View {
             Capsule()
                 .fill(Color("GrayScale100"))
                 .frame(width: 34, height: 5)
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color("GrayScale300"))
+            if !isMinimized {
+                Text(title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color("GrayScale300"))
+            }
         }
         .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.bottom, isMinimized ? 11 : 8)
         .frame(maxWidth: .infinity)
         .contentShape(.rect)
         .gesture(dragGesture)
+        .onTapGesture { if isMinimized { onExpand() } }
+        .accessibilityLabel(isMinimized ? "Expand chat" : "Resize chat")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onExpand() }
     }
 
     @ViewBuilder

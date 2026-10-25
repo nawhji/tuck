@@ -3,7 +3,7 @@ import RoomPlan
 import simd
 
 /// Web / backend contract. All distances are meters in this scan's world space.
-struct RoomDocument: Codable, Sendable {
+struct RoomDocument: Codable, Equatable, Sendable {
     let schemaVersion: Int
     let id: String
     let capturedAt: Date
@@ -37,7 +37,7 @@ struct RoomDocument: Codable, Sendable {
     }
 }
 
-struct RoomElement: Codable, Identifiable, Sendable {
+struct RoomElement: Codable, Equatable, Identifiable, Sendable {
     let id: String
     let kind: String
     let category: String
@@ -47,6 +47,7 @@ struct RoomElement: Codable, Identifiable, Sendable {
     let position: Vector3
     /// Local-to-world matrix: [column0, column1, column2, column3], 16 floats.
     let transform: [Float]
+    var polygonCorners: [Vector3]? = nil
 
     init(object: CapturedRoom.Object) {
         self.init(
@@ -68,6 +69,9 @@ struct RoomElement: Codable, Identifiable, Sendable {
             dimensions: surface.dimensions,
             transform: surface.transform
         )
+        if !surface.polygonCorners.isEmpty {
+            polygonCorners = surface.polygonCorners.map { Vector3(x: $0.x, y: $0.y, z: $0.z) }
+        }
     }
 
     private init(
@@ -98,13 +102,13 @@ struct RoomElement: Codable, Identifiable, Sendable {
     }
 }
 
-struct Dimensions: Codable, Sendable {
+struct Dimensions: Codable, Equatable, Sendable {
     let width: Float
     let height: Float
     let depth: Float
 }
 
-struct Vector3: Codable, Sendable {
+struct Vector3: Codable, Equatable, Sendable {
     let x: Float
     let y: Float
     let z: Float

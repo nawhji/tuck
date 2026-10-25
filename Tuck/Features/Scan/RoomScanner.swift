@@ -18,6 +18,7 @@ final class RoomScanner: ObservableObject {
     @Published private(set) var saveMessage: String?
 
     private weak var captureView: RoomCaptureView?
+    private var captureNeedsStop = false
     private var capturedRoom: CapturedRoom?
     private var processingTimeout: Task<Void, Never>?
 
@@ -30,6 +31,7 @@ final class RoomScanner: ObservableObject {
     func start() async {
         guard isSupported, !isSaving, phase != .permission,
               phase != .scanning, phase != .processing else { return }
+        releaseCapture()
         scanID = UUID()
         let requestID = scanID
         phase = .permission
@@ -63,14 +65,19 @@ final class RoomScanner: ObservableObject {
     }
 
     func attach(_ view: RoomCaptureView) {
-        guard phase == .scanning else { return }
+        guard phase == .scanning, captureView == nil else { return }
         captureView = view
+        captureNeedsStop = true
+        RoomScanDiagnostics.log.info("Starting RoomPlan capture session.")
         view.captureSession.run(configuration: RoomCaptureSession.Configuration())
+        RoomScanDiagnostics.log.info("RoomPlan captureSession.run returned.")
     }
 
     func stop() {
-        guard phase == .scanning, let captureView else { return }
+        guard phase == .scanning, captureNeedsStop, let captureView else { return }
+        captureNeedsStop = false
         phase = .processing
+        RoomScanDiagnostics.log.info("Stopping RoomPlan for processing.")
         // Keep the UIView mounted until didPresent delivers the processed room.
         captureView.captureSession.stop(pauseARSession: true)
         let token = scanID
@@ -86,9 +93,28 @@ final class RoomScanner: ObservableObject {
         scanID = UUID()
         processingTimeout?.cancel()
         processingTimeout = nil
-        captureView?.captureSession.stop(pauseARSession: true)
-        captureView = nil
+        releaseCapture()
+        isSaving = false
         phase = .idle
+    }
+
+    /// Stop a mounted view once without overwriting RoomCaptureView's internal delegate.
+    func detach(_ view: RoomCaptureView) {
+        guard captureView === view else { return }
+        releaseCapture()
+    }
+
+    private func releaseCapture() {
+        guard let view = captureView else { captureNeedsStop = false; return }
+        captureView = nil
+        if captureNeedsStop {
+            captureNeedsStop = false
+            RoomScanDiagnostics.log.info("Releasing active RoomPlan capture session.")
+            view.captureSession.stop(pauseARSession: true)
+        } else {
+            // A processing session has already received stop(); don't submit it twice.
+            view.captureSession.arSession.pause()
+        }
     }
 
     func updateCounts(walls: Int, objects: Int, token: UUID) {

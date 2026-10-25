@@ -4,6 +4,7 @@ struct ProfileView: View {
     let name: String
     let initial: String
     let favorites: FavoritesStore
+    var onOpenRoom: ((RoomLibraryEntry) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -27,9 +28,9 @@ struct ProfileView: View {
                 .listRowBackground(Color.clear)
                 Section {
                     NavigationLink {
-                        ProfileRoomsView()
+                        ProfileRoomsView(onOpenRoom: onOpenRoom)
                     } label: {
-                        profileRow("My rooms", icon: "cube", subtitle: "Your scans and measurements")
+                        profileRow("My rooms", icon: "cube", subtitle: "Your layouts, scans and measurements")
                     }
                     NavigationLink {
                         SavedFurnitureView(favorites: favorites)
@@ -76,8 +77,9 @@ struct ProfileView: View {
 }
 
 private struct ProfileRoomsView: View {
-    @State private var rooms: [SavedScan] = []
-    @State private var selectedRoom: SavedScan?
+    var onOpenRoom: ((RoomLibraryEntry) -> Void)? = nil
+    @State private var rooms: [RoomLibraryEntry] = []
+    @State private var selectedRoom: RoomLibraryEntry?
     @State private var isLoading = true
     @State private var errorMessage: String?
 
@@ -93,14 +95,21 @@ private struct ProfileRoomsView: View {
                                        description: Text("Scan a room using the camera button on Home."))
             } else {
                 List(rooms) { room in
-                    Button { selectedRoom = room } label: {
+                    Button {
+                        if let onOpenRoom { onOpenRoom(room) }
+                        else { selectedRoom = room }
+                    } label: {
                         HStack(spacing: 14) {
                             Image(systemName: "cube").font(.title2)
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(room.document.capturedAt, style: .date).font(.headline)
-                                Text(room.document.capturedAt, style: .time).font(.caption)
-                                Text("\(room.document.walls.count) walls · \(room.document.objects.count) items")
-                                    .font(.caption).foregroundStyle(.secondary)
+                                Text(room.name).font(.headline)
+                                Text(room.updatedAt, style: .date).font(.caption)
+                                if let layout = room.layout {
+                                    Text("\(layout.items.count) furniture items").font(.caption).foregroundStyle(.secondary)
+                                } else if let scan = room.scan {
+                                    Text("\(scan.document.walls.count) walls · \(scan.document.objects.count) items")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             Image(systemName: "chevron.right").font(.caption)
@@ -111,13 +120,41 @@ private struct ProfileRoomsView: View {
             }
         }
         .navigationTitle("My rooms")
-        .sheet(item: $selectedRoom) { SavedRoomView(scan: $0) }
+         .sheet(item: $selectedRoom) { room in
+            if let layout = room.layout {
+                SavedLayoutRoomView(room: room, layout: layout)
+            } else if let scan = room.scan {
+                SavedRoomView(scan: scan)
+            }
+        }
         .task {
             do {
-                rooms = try await Task.detached(priority: .userInitiated) { try ScanStore.all() }.value
+                rooms = try await Task.detached(priority: .userInitiated) {
+                    try RoomLibraryStore.ensureDemoRoom()
+                    return try RoomLibraryStore.all()
+                }.value
             } catch { errorMessage = "Your scans couldn't be read. The original files have been kept." }
             isLoading = false
         }
+    }
+}
+
+private struct SavedLayoutRoomView: View {
+    let room: RoomLibraryEntry
+    let layout: RoomLayoutSnapshot
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            GeometryReader { geometry in
+                RoomStageView(hasScannedSpace: true, onScanTap: {}, viewportSize: geometry.size,
+                              initialLayout: layout)
+            }
+            .background(.white)
+            .navigationTitle(room.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .tint(Color("TuckBrown"))
     }
 }
 
