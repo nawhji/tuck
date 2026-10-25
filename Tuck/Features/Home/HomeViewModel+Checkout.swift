@@ -9,6 +9,7 @@ extension HomeViewModel {
     /// 지정이 없으면 방에 놓인(선택된) 상품이다. Try를 누르지 않아도 된다.
     @MainActor
     func startCheckout(for placedID: Product.ID?, intent: BuyIntent, attachingTo messageID: ChatMessage.ID) async {
+        guard !Task.isCancelled else { return }
         let requested = intent.productID.flatMap { id in catalog?.row(id: id) != nil ? id : nil }
         guard let productID = requested ?? placedID else {
             attach([.text("I'm not sure which piece you mean. Tell me which one, or describe what you want, and I'll order it.")], to: messageID)
@@ -17,8 +18,12 @@ extension HomeViewModel {
         selectedProductID = productID
         do {
             let response = try await checkout.quote(productID: productID, quantity: intent.quantity, budgetCents: intent.budgetCents)
+            try Task.checkCancellation()
             attach(blocks(for: response), note: quoteNote(response), to: messageID)
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             attach([.text("I couldn't get a quote right now: \(error.localizedDescription)")], to: messageID)
         }
     }

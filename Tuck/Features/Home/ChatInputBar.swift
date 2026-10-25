@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// 채팅 입력창. 비어 있고 포커스가 없을 때는 한 줄, 입력 중에는 이미지·음성 버튼이 있는 확장 형태.
+/// 채팅 입력창. 비어 있고 포커스가 없을 때는 한 줄, 입력 중에는 추가 입력 공간이 있는 확장 형태.
 struct ChatInputBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
     let canSend: Bool
     let onSend: () -> Void
-    let onImage: () -> Void
+    var isResponding = false
+    var onStop: () -> Void = {}
 
     private var isActive: Bool { isFocused.wrappedValue || !text.isEmpty }
 
@@ -19,7 +20,6 @@ struct ChatInputBar: View {
             }
             if isActive {
                 HStack(spacing: 14) {
-                    iconButton("photo", label: "Add image", action: onImage)
                     Spacer()
                     sendButton
                 }
@@ -47,36 +47,37 @@ struct ChatInputBar: View {
             .focused(isFocused)
     }
 
-    private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 20))
-                .foregroundStyle(Color("TuckBrown"))
-        }
-        .accessibilityLabel(label)
-    }
-
     private var sendButton: some View {
         // .disabled 를 쓰면 비활성 버튼이 탭을 삼켜 입력창 포커스가 안 잡힌다.
-        Button { if canSend { onSend() } else { isFocused.wrappedValue = true } } label: {
-            Image(systemName: "arrow.up")
-                .font(.system(size: 16, weight: .semibold))
+        Button {
+            if isResponding { onStop() }
+            else if canSend { onSend() }
+            else { isFocused.wrappedValue = true }
+        } label: {
+            Image(systemName: isResponding ? "stop.fill" : "arrow.up")
+                .font(.system(size: isResponding ? 12 : 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 34, height: 34)
-                .background(canSend ? Color("TuckBrown") : Color("GrayScale100"), in: .circle)
+                .background((canSend || isResponding) ? Color("TuckBrown") : Color("GrayScale100"), in: .circle)
         }
-        .accessibilityLabel("Send")
+        .accessibilityLabel(isResponding ? "Stop response" : "Send")
     }
 }
 
 #Preview("Idle") {
     @Previewable @State var text = ""
     @Previewable @FocusState var focused: Bool
-    ChatInputBar(text: $text, isFocused: $focused, canSend: false, onSend: {}, onImage: {})
+    ChatInputBar(text: $text, isFocused: $focused, canSend: false, onSend: {})
 }
 
 #Preview("Typing") {
     @Previewable @State var text = "I’d like to get a modern carpet besides my bed."
     @Previewable @FocusState var focused: Bool
-    ChatInputBar(text: $text, isFocused: $focused, canSend: true, onSend: {}, onImage: {})
+    ChatInputBar(text: $text, isFocused: $focused, canSend: true, onSend: {})
+}
+
+#Preview("Responding") {
+    @Previewable @State var text = ""
+    @Previewable @FocusState var focused: Bool
+    ChatInputBar(text: $text, isFocused: $focused, canSend: false, onSend: {}, isResponding: true, onStop: {})
 }

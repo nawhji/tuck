@@ -31,30 +31,27 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            GeometryReader { geometry in
-                ZStack(alignment: .top) {
-                    Color.white.ignoresSafeArea()
-                    stage(in: geometry)
-                    sheetLayer(in: geometry)
-                }
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $model.isProfilePresented) {
-                ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites, orders: model.orders, onOpenRoom: { entry in
-                    moveEnabled = false
-                    preview.setMoveEnabled(false)
-                    model.openSavedRoom(entry)
-                })
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                Color.white.ignoresSafeArea()
+                stage(in: geometry)
+                sheetLayer(in: geometry)
             }
         }
-        .tint(Color("TuckBrown"))
         .animation(.spring(duration: 0.35), value: isInputFocused)
         .preferredColorScheme(.light)
         .environment(favorites)
         .sheet(isPresented: $model.isProfilePresented, onDismiss: roomPickerDismissed) {
-            ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites,
-                        onOpenRoom: queueRoomSelection)
+            NavigationStack {
+                ProfileView(name: model.userName, initial: model.userInitial, favorites: favorites,
+                            orders: model.orders, onOpenRoom: queueRoomSelection)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { model.isProfilePresented = false }
+                        }
+                    }
+            }
+            .tint(Color("TuckBrown"))
         }
         .sheet(isPresented: $showsRoomLibrary, onDismiss: roomPickerDismissed) {
             MyRoomsSheet(onOpenRoom: queueRoomSelection)
@@ -192,7 +189,7 @@ struct HomeView: View {
                     model.send(contextProvider: {
                         try await preview.chatContext(roomID: roomID, roomName: roomName)
                     })
-                }, onImage: model.attachImage, onSelect: model.toggleSelection,
+                }, isResponding: model.isResponding, onStop: model.stopResponding, onSelect: model.toggleSelection,
                 onOrder: model.placeOrder,
                 isMinimized: sheetHeight < 90,
                 onExpand: { withAnimation(.spring(duration: 0.35)) { model.sheetDetent = .collapsed } }
