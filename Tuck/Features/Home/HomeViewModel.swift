@@ -50,6 +50,8 @@ final class HomeViewModel {
     let userName = "Harper"
     let userInitial = "H"
 
+    let orders = OrderHistoryStore()
+
     var hasScannedSpace = false
     var isPresentingScan = false
     var isProfilePresented = false
@@ -115,7 +117,8 @@ final class HomeViewModel {
     }
 
     private let client = ClaudeClient()
-    private let catalog = try? ProductCatalog()
+    let checkout = CheckoutClient()
+    let catalog = try? ProductCatalog()
     private var roomGeneration = 0
     private var responseTask: Task<Void, Never>?
     private var responseID = UUID()
@@ -258,7 +261,8 @@ final class HomeViewModel {
     }
 
     func send(contextProvider: (() async throws -> RoomChatContext)? = nil) {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 실수로 입력한 카드 번호는 모델·대화 이력에 남기지 않는다.
+        let text = CardNumberRedactor.redact(draft.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !text.isEmpty, !isResponding else { return }
         let generation = roomGeneration
         let requestID = UUID()
@@ -288,7 +292,11 @@ final class HomeViewModel {
                 guard generation == roomGeneration, responseID == requestID else { return }
                 messages.append(ChatMessage(role: .user, text: text))
                 persistChat()
-                let turns = messages.map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
+                var turns = messages.map { ClaudeClient.Turn(role: $0.role == .user ? "user" : "assistant", text: $0.rawText) }
+                // 모델이 어떤 가구를 말하는지 알 수 있도록 방에 놓인 상품을 마지막 질문에 덧붙인다. (화면에는 보이지 않는다)
+                if let last = turns.last {
+                    turns[turns.count - 1] = .init(role: last.role, text: last.text + "\n\n" + placedProductContext)
+                }
                 let reply = ChatMessage(role: .assistant, text: "")
                 replyID = reply.id
                 streamingReplyID = reply.id
@@ -298,6 +306,10 @@ final class HomeViewModel {
                     try Task.checkCancellation()
                     guard generation == roomGeneration, responseID == requestID else { return }
                     append(chunk, to: reply.id)
+                }
+                guard generation == roomGeneration, responseID == requestID else { return }
+                if let intent = rawText(of: reply.id).flatMap(ReplyParser.buyIntent(in:)) {
+                    await startCheckout(for: selectedProductID, intent: intent, attachingTo: reply.id)
                 }
             } catch is CancellationError {
             } catch {
@@ -310,6 +322,16 @@ final class HomeViewModel {
                 }
             }
         }
+    }
+
+    private var placedProductContext: String {
+        let detail = selectedProductID.map { "the product currently placed in the room has catalog id \($0)" }
+            ?? "no product is placed in the room right now"
+        return "[app context, not typed by the user: \(detail)]"
+    }
+
+    private func rawText(of id: ChatMessage.ID) -> String? {
+        messages.first(where: { $0.id == id })?.rawText
     }
 
     /// 원문을 이어 붙이고 본문·카드 덩어리로 다시 나눈다. 카드는 JSON 블록이 닫힌 뒤에 나타난다.
@@ -325,6 +347,8 @@ final class HomeViewModel {
             switch segment {
             case .text(let text):
                 return .text(text)
+            case .buy:
+                return nil
             case .products(let picks):
                 // 카탈로그에 없는 id는 버린다.
                 let products = catalog.map { catalog in picks.compactMap { Product(pick: $0, catalog: catalog) } } ?? []

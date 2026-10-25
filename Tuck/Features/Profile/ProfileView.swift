@@ -4,75 +4,61 @@ struct ProfileView: View {
     let name: String
     let initial: String
     let favorites: FavoritesStore
+    let orders: OrderHistoryStore
     var onOpenRoom: ((RoomLibraryEntry) -> Void)? = nil
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack(spacing: 16) {
-                        Text(initial)
-                            .font(.system(size: 26, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 64, height: 64)
-                            .background(Color("TuckBrown"), in: Circle())
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(name).font(.title2.weight(.semibold))
-                            Text("Make yourself at home.")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 16)
+        ScrollView {
+            VStack(spacing: 0) {
+                VStack(spacing: 15) {
+                    Text(initial)
+                        .font(.system(size: 40, weight: .regular))
+                        .foregroundStyle(.white)
+                        .frame(width: 80, height: 80)
+                        .background(Color("TuckBrown"), in: Circle())
+                    Text(name)
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.black)
                 }
-                .listRowBackground(Color.clear)
-                Section {
-                    NavigationLink {
-                        ProfileRoomsView(onOpenRoom: onOpenRoom)
-                    } label: {
-                        profileRow("My rooms", icon: "cube", subtitle: "Your layouts, scans and measurements")
-                    }
-                    NavigationLink {
-                        SavedFurnitureView(favorites: favorites)
-                    } label: {
-                        profileRow("Saved furniture", icon: "heart", subtitle: "\(favorites.products.count) saved")
-                    }
-                    NavigationLink {
-                        ContentUnavailableView(
-                            "No orders yet", systemImage: "shippingbox",
-                            description: Text("Your completed orders will appear here.")
-                        )
-                        .navigationTitle("Orders")
-                    } label: {
-                        profileRow("Orders", icon: "shippingbox", subtitle: "Your purchase history")
-                    }
-                } footer: {
-                    Text("Your rooms and saved furniture are stored on this iPhone.")
-                        .padding(.top, 8)
+                .padding(.top, 16).padding(.bottom, 40)
+
+                VStack(spacing: 0) {
+                    menuRow("My Space") { ProfileRoomsView(onOpenRoom: onOpenRoom) }
+                    menuRow("Saved") { SavedFurnitureView(favorites: favorites) }
+                    menuRow("Order History") { OrderHistoryView(store: orders) }
+                    menuRow("Payment Method") { PaymentMethodView() }
+                    menuRow("Addresses") { AddressesView() }
                 }
+                .padding(.horizontal, 25)
             }
-            .scrollContentBackground(.hidden)
-            .background(Color("TuckCream"))
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .frame(maxWidth: .infinity)
         }
-        .tint(Color("TuckBrown"))
-        .alert("Saved furniture", isPresented: Binding(
+        .background(Color.white)
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Saved", isPresented: Binding(
             get: { favorites.errorMessage != nil },
             set: { if !$0 { favorites.errorMessage = nil } }
         )) { Button("OK", role: .cancel) { favorites.errorMessage = nil } } message: { Text(favorites.errorMessage ?? "") }
     }
 
-    private func profileRow(_ title: String, icon: String, subtitle: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon).font(.title3).frame(width: 28).foregroundStyle(Color("TuckBrown"))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+    private func menuRow<Destination: View>(_ title: String, @ViewBuilder destination: @escaping () -> Destination) -> some View {
+        NavigationLink(destination: destination) {
+            VStack(spacing: 0) {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Color(red: 0.15, green: 0.15, blue: 0.15))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color(white: 0.6))
+                }
+                .padding(.vertical, 18)
+                Divider().overlay(Color(white: 0.9))
             }
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
     }
 }
 
@@ -113,32 +99,22 @@ private struct ProfileRoomsView: View {
                 ContentUnavailableView("No rooms yet", systemImage: "cube",
                                        description: Text("Scan a room using the camera button on Home."))
             } else {
-                List(rooms) { room in
-                    Button {
-                        if let onOpenRoom { onOpenRoom(room) }
-                        else { selectedRoom = room }
-                    } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: "cube").font(.title2)
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(room.name).font(.headline)
-                                Text(room.updatedAt, style: .date).font(.caption)
-                                if let layout = room.layout {
-                                    Text("\(layout.items.count) furniture items").font(.caption).foregroundStyle(.secondary)
-                                } else if let scan = room.scan {
-                                    Text("\(scan.document.walls.count) walls · \(scan.document.objects.count) items")
-                                        .font(.caption).foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption)
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        ForEach(rooms) { room in
+                            Button {
+                                if let onOpenRoom { onOpenRoom(room) }
+                                else { selectedRoom = room }
+                            } label: { RoomRow(room: room) }
+                                .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 6)
                     }
+                    .padding(.horizontal, 19).padding(.vertical, 12)
                 }
             }
         }
-        .navigationTitle("My rooms")
+        .background(Color(.systemGray6).opacity(0.5))
+        .navigationTitle("My Space")
          .sheet(item: $selectedRoom) { room in
             if let layout = room.layout {
                 SavedLayoutRoomView(room: room, layout: layout)
@@ -185,62 +161,181 @@ private struct SavedFurnitureView: View {
                 ContentUnavailableView("No saved furniture yet", systemImage: "heart",
                                        description: Text("Tap the heart on a furniture recommendation to save it here."))
             } else {
-                List {
-                    ForEach(favorites.products) { product in
-                        NavigationLink {
-                            SavedFurnitureDetail(product: product, favorites: favorites)
-                        } label: {
-                            HStack(spacing: 12) {
-                                RemoteImage(url: product.imageURL)
-                                    .frame(width: 84, height: 84).clipShape(RoundedRectangle(cornerRadius: 14))
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(product.name).font(.subheadline.weight(.medium)).lineLimit(2)
-                                    Text(product.brand).font(.caption).foregroundStyle(.secondary)
-                                    Text(product.price).font(.subheadline)
-                                }
-                            }
-                        }
-                        .swipeActions {
-                            Button("Unsave", role: .destructive) { favorites.toggle(product) }
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        ForEach(favorites.products) { product in
+                            ProductCardView(product: product, isSelected: false)
                         }
                     }
+                    .padding(.vertical, 12)
                 }
             }
         }
-        .navigationTitle("Saved furniture")
+        .background(Color(.systemGray6).opacity(0.5))
+        .environment(favorites)
+        .navigationTitle("Saved")
     }
 }
 
-private struct SavedFurnitureDetail: View {
-    let product: Product
-    let favorites: FavoritesStore
+private struct RoomRow: View {
+    let room: RoomLibraryEntry
+
+    private var summary: String {
+        if let layout = room.layout { return "\(layout.items.count) furniture items" }
+        if let scan = room.scan { return "\(scan.document.walls.count) walls · \(scan.document.objects.count) items" }
+        return ""
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                RemoteImage(url: product.imageURL).frame(height: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                Text(product.brand).font(.subheadline).foregroundStyle(.secondary)
-                Text(product.name).font(.title2.weight(.semibold))
-                Text(product.price).font(.title3)
-                Text(product.keywords.map { "#\($0)" }.joined(separator: "  "))
-                    .font(.caption).foregroundStyle(.secondary)
-                Button { favorites.toggle(product) } label: {
-                    Label(favorites.contains(product.id) ? "Saved" : "Save furniture",
-                          systemImage: favorites.contains(product.id) ? "heart.fill" : "heart")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered).controlSize(.large)
-                if let url = product.sourceURL, ["https", "http"].contains(url.scheme?.lowercased() ?? "") {
-                    Link(destination: url) {
-                        Label("View product", systemImage: "arrow.up.right")
-                            .frame(maxWidth: .infinity)
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(room.name)
+                    .font(.system(size: 16, weight: .medium)).foregroundStyle(.black).lineLimit(2)
+                Text(room.updatedAt, format: .dateTime.year().month(.abbreviated).day())
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Color("GrayScale300"))
+                Text(summary)
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Color("TuckBrown"))
+            }
+            .padding(.leading, 16).padding(.trailing, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            RoomStageView(hasScannedSpace: true, onScanTap: {}, viewportSize: CGSize(width: 150, height: 130),
+                          initialLayout: room.layout,
+                          scannedRoom: room.layout?.scannedRoom ?? room.scan?.document)
+                .frame(width: 150, height: 130)
+                .allowsHitTesting(false)
+        }
+        .frame(height: 130)
+        .background(.white)
+        .clipShape(.rect(cornerRadius: 30))
+    }
+}
+
+private struct OrderHistoryView: View {
+    let store: OrderHistoryStore
+
+    var body: some View {
+        Group {
+            if store.orders.isEmpty {
+                ContentUnavailableView("No orders yet", systemImage: "shippingbox",
+                                       description: Text("Your confirmed orders will appear here."))
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 14) {
+                        ForEach(store.orders) { order in
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(order.date, format: .dateTime.year().month(.abbreviated).day().hour().minute())
+                                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Color("GrayScale300"))
+                                HStack(spacing: 14) {
+                                    RemoteImage(url: order.imageURL.flatMap(URL.init(string:)))
+                                        .frame(width: 84, height: 84)
+                                        .clipShape(.rect(cornerRadius: 16))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(order.productName)
+                                            .font(.system(size: 16, weight: .medium)).foregroundStyle(.black).lineLimit(2)
+                                        Text(order.brand)
+                                            .font(.system(size: 12, weight: .medium)).foregroundStyle(Color("TuckBrown"))
+                                        Text(order.quantity > 1 ? "\(order.total) · Qty \(order.quantity)" : order.total)
+                                            .font(.system(size: 14, weight: .medium)).foregroundStyle(.black)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                Divider()
+                                HStack {
+                                    Label("Order confirmed", systemImage: "checkmark.circle.fill")
+                                        .font(.system(size: 12, weight: .medium)).foregroundStyle(Color("TuckBrown"))
+                                    Spacer()
+                                    Text(order.address)
+                                        .font(.system(size: 12)).foregroundStyle(Color("GrayScale300")).lineLimit(1)
+                                }
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.white, in: .rect(cornerRadius: 24))
+                        }
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .padding(.horizontal, 19).padding(.vertical, 12)
                 }
             }
-            .padding(24)
         }
-        .navigationTitle("Furniture")
-        .navigationBarTitleDisplayMode(.inline)
+        .background(Color(.systemGray6).opacity(0.5))
+        .navigationTitle("Order History")
+    }
+}
+
+private struct PaymentMethodView: View {
+    private let card = DemoProfile.card
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Image(systemName: "creditcard").font(.system(size: 22, weight: .light))
+                        Spacer()
+                        Text(card.brand.uppercased())
+                            .font(.system(size: 18, weight: .bold)).italic()
+                    }
+                    Spacer()
+                    Text("••••  ••••  ••••  \(card.last4)")
+                        .font(.system(size: 22, weight: .medium, design: .monospaced))
+                    HStack {
+                        Text(DemoProfile.current.name.uppercased())
+                        Spacer()
+                        Text("Test card")
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(.white.opacity(0.2), in: .capsule)
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.top, 14)
+                }
+                .foregroundStyle(.white)
+                .padding(22)
+                .frame(height: 190)
+                .background(
+                    LinearGradient(colors: [Color("TuckBrown"), Color("TuckBrown").opacity(0.7)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: .rect(cornerRadius: 24))
+                Text("Payments are processed by Stripe in test mode, so nothing is really charged.")
+                    .font(.system(size: 12)).foregroundStyle(Color("GrayScale300"))
+            }
+            .padding(.horizontal, 19).padding(.vertical, 12)
+        }
+        .background(Color(.systemGray6).opacity(0.5))
+        .navigationTitle("Payment Method")
+    }
+}
+
+private struct AddressesView: View {
+    private let address = DemoProfile.current.address
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 22)).foregroundStyle(Color("TuckBrown"))
+                    Text(DemoProfile.current.name)
+                        .font(.system(size: 16, weight: .medium)).foregroundStyle(.black)
+                    Spacer()
+                    Text("Default")
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(Color("TuckBrown"))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Color("TuckBrown").opacity(0.12), in: .capsule)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(address.line1)
+                    if let line2 = address.line2, !line2.isEmpty { Text(line2) }
+                    Text("\(address.city), \(address.state) \(address.postalCode)")
+                    Text(address.country)
+                }
+                .font(.system(size: 14)).foregroundStyle(Color(white: 0.3))
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white, in: .rect(cornerRadius: 24))
+            .padding(.horizontal, 19).padding(.vertical, 12)
+        }
+        .background(Color(.systemGray6).opacity(0.5))
+        .navigationTitle("Addresses")
     }
 }

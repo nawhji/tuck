@@ -12,6 +12,8 @@ struct ChatMessage: Identifiable, Equatable {
     enum Block: Equatable {
         case text(String)
         case products([Product])
+        /// 주문 확인 카드. 스트림이 끝난 뒤 앱이 붙이며, 상태는 서버 주문 상태를 따라 바뀐다.
+        case checkout(CheckoutCard)
     }
 
     let id: UUID
@@ -20,6 +22,8 @@ struct ChatMessage: Identifiable, Equatable {
     var text: String
     /// 에이전트 답변 (JSON 블록은 카드로 바뀌어 있다).
     var blocks: [Block]
+    /// 답변 뒤에 앱이 붙이는 덩어리. 스트리밍 중 `blocks`를 다시 만들어도 사라지지 않는다.
+    var trailing: [Block] = []
     /// 모델이 보낸 원문. 대화 이력을 다시 보낼 때 쓴다.
     var rawText: String
 
