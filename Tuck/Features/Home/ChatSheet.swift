@@ -2,7 +2,6 @@ import SwiftUI
 
 /// 하단 채팅 시트: 핸들 + 제목 + 메시지 목록 + 입력창. 높이 조절(드래그)은 부모가 담당한다.
 struct ChatSheet<Drag: Gesture>: View {
-    let title: String
     let messages: [ChatMessage]
     let selectedProductID: Product.ID?
     @Binding var draft: String
@@ -81,18 +80,13 @@ struct ChatSheet<Drag: Gesture>: View {
     }
 
     private var grabber: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             Capsule()
                 .fill(Color("GrayScale100"))
                 .frame(width: 34, height: 5)
-            if !isMinimized {
-                Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color("GrayScale300"))
-            }
         }
         .padding(.top, 12)
-        .padding(.bottom, isMinimized ? 11 : 8)
+        .padding(.bottom, 11)
         .frame(maxWidth: .infinity)
         .contentShape(.rect)
         .gesture(dragGesture)

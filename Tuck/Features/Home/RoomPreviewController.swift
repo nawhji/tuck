@@ -8,10 +8,12 @@ final class RoomPreviewController: ObservableObject {
     private var moveEnabled = false
     private var initialLayout: RoomLayoutSnapshot?
     private var scannedRoom: RoomDocument?
+    private var initialSnapshot: RoomLayoutSnapshot?
 
     func attach(_ view: WKWebView, layout: RoomLayoutSnapshot?, moveEnabled: Bool, scannedRoom: RoomDocument? = nil) {
         webView = view
         isReady = false
+        initialSnapshot = nil
         initialLayout = layout
         self.scannedRoom = scannedRoom
         self.moveEnabled = moveEnabled
@@ -21,6 +23,7 @@ final class RoomPreviewController: ObservableObject {
         guard webView === view else { return }
         webView = nil
         isReady = false
+        initialSnapshot = nil
     }
 
     func didLoad(_ view: WKWebView) async throws {
@@ -38,6 +41,7 @@ final class RoomPreviewController: ObservableObject {
         guard webView === view else { return }
         isReady = true
         try await applyMoveMode()
+        initialSnapshot = try await snapshot()
     }
 
     func setMoveEnabled(_ enabled: Bool) {
@@ -50,6 +54,23 @@ final class RoomPreviewController: ObservableObject {
     private func applyMoveMode() async throws {
         guard let webView else { return }
         _ = try await webView.evaluateJavaScript("window.tuckEditor.setFurnitureMoveEnabled(\(moveEnabled ? "true" : "false"))")
+    }
+
+    func hasUnsavedChanges() async throws -> Bool {
+        guard let initialSnapshot else { throw RoomLibraryError.previewNotReady }
+        return try await snapshot().hasPlacementChanges(comparedTo: initialSnapshot)
+    }
+
+    func acceptSavedSnapshot(_ snapshot: RoomLayoutSnapshot) {
+        initialSnapshot = snapshot
+    }
+
+    func discardChanges() async throws {
+        guard isReady, let webView, let initialSnapshot else { throw RoomLibraryError.previewNotReady }
+        let json = String(decoding: try JSONEncoder().encode(initialSnapshot), as: UTF8.self)
+        _ = try await webView.evaluateJavaScript("window.tuckEditor.loadLayout(\(json))")
+        moveEnabled = false
+        try await applyMoveMode()
     }
 
     func snapshot() async throws -> RoomLayoutSnapshot {
