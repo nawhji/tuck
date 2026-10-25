@@ -102,4 +102,4 @@ Room scans, saved room layouts, chat history, and favorites are stored on the de
 
 ## Design reference
 
-[Figma — CalHacks 13.0 / Tuck](https://www.figma.com/design/flIQdS0FkYcdUDU0V0pojh/CalHacks13.0---tuck)
+[Figma - CalHacks 13.0 / Tuck](https://www.figma.com/design/flIQdS0FkYcdUDU0V0pojh/CalHacks13.0---tuck)
