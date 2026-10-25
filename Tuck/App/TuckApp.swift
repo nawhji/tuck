@@ -16,7 +16,7 @@ struct TuckApp: App {
                         .zIndex(1)
                 }
             }
-            // 3DS 등 외부 인증에서 돌아올 때 Stripe가 결과를 이어받는다.
+            // Stripe resumes the flow when the app returns from external authentication such as 3DS.
             .onOpenURL { _ = PaymentSheetPresenter.handleURLCallback($0) }
             .task {
                 try? await Task.sleep(for: .seconds(1.5))

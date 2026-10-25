@@ -46,7 +46,7 @@ enum RoomNameSequence {
 /// Home chat and local scanned-room editor state.
 @Observable
 final class HomeViewModel {
-    /// 로그인이 없는 서비스라 사용자 정보는 고정값이다.
+    /// User information is fixed because this service does not have sign-in.
     let userName = "Harper"
     let userInitial = "H"
 
@@ -366,7 +366,7 @@ final class HomeViewModel {
         messages.first(where: { $0.id == id })?.rawText
     }
 
-    /// 원문을 이어 붙이고 본문·카드 덩어리로 다시 나눈다. 카드는 JSON 블록이 닫힌 뒤에 나타난다.
+    /// Appends raw response text and splits it into text and card segments. A card appears after its JSON block closes.
     private func append(_ text: String, to id: ChatMessage.ID) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
         messages[index].rawText += text
@@ -382,7 +382,7 @@ final class HomeViewModel {
             case .buy:
                 return nil
             case .products(let picks):
-                // 카탈로그에 없는 id는 버린다.
+                // Ignore IDs that are not in the catalog.
                 let products = catalog.map { catalog in picks.compactMap { Product(pick: $0, catalog: catalog) } } ?? []
                 return products.isEmpty ? nil : .products(products)
             }
@@ -393,8 +393,8 @@ final class HomeViewModel {
         messages.first(where: { $0.id == id })?.rawText.isEmpty ?? true
     }
 
-    func attachImage() { /* TODO: 이미지 입력 */ }
-    /// 카드를 누르면 선택, 선택된 카드를 다시 누르면 해제. (시뮬레이션 연동은 TODO)
+    func attachImage() { /* TODO: image input */ }
+    /// Tapping a card selects it; tapping the selected card again deselects it. (Simulation integration is TODO.)
     func toggleSelection(of product: Product) {
         selectedProductID = selectedProductID == product.id ? nil : product.id
     }

@@ -27,7 +27,7 @@
 		B10000000000000000000010 /* ClaudeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000010 /* ClaudeClient.swift */; };
 		B10000000000000000000011 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000011 /* Secrets.swift */; };
 		B10000000000000000000020 /* ProductCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000020 /* ProductCatalog.swift */; };
-		B10000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */; };
+		B10000000000000000000021 /* TUCK_Product_Catalog.csv in Resources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000021 /* TUCK_Product_Catalog.csv */; };
 		B10000000000000000000090 /* TuckAvatar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000090 /* TuckAvatar.swift */; };
 		C10000000000000000000030 /* ScanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000030 /* ScanStore.swift */; };
 		C10000000000000000000031 /* SavedRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000031 /* SavedRoomView.swift */; };
@@ -86,7 +86,7 @@
 		B00000000000000000000010 /* ClaudeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeClient.swift; sourceTree = "<group>"; };
 		B00000000000000000000011 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		B00000000000000000000020 /* ProductCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCatalog.swift; sourceTree = "<group>"; };
-		B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */ = {isa = PBXFileReference; lastKnownFileType = text; name = "TUCK_Product_Catalog - 시트1.csv"; path = "data/TUCK_Product_Catalog - 시트1.csv"; sourceTree = SOURCE_ROOT; };
+		B00000000000000000000021 /* TUCK_Product_Catalog.csv */ = {isa = PBXFileReference; lastKnownFileType = text; name = "TUCK_Product_Catalog.csv"; path = "data/TUCK_Product_Catalog.csv"; sourceTree = SOURCE_ROOT; };
 		B00000000000000000000090 /* TuckAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuckAvatar.swift; sourceTree = "<group>"; };
 		C00000000000000000000030 /* ScanStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStore.swift; sourceTree = "<group>"; };
 		C00000000000000000000031 /* SavedRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedRoomView.swift; sourceTree = "<group>"; };
@@ -229,7 +229,7 @@
 				A00000000000000000000076 /* Assets.xcassets */,
 				C30000000000000000000013 /* DemoRoomPreview.png */,
 				C30000000000000000000012 /* DemoRoom.html */,
-				B00000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv */,
+				B00000000000000000000021 /* TUCK_Product_Catalog.csv */,
 				A0000000000000000000006A /* Info.plist */,
 			);
 			path = Resources;
@@ -367,7 +367,7 @@
 				A000000000000000000000CE /* Assets.xcassets in Resources */,
 				C30000000000000000000003 /* DemoRoomPreview.png in Resources */,
 				C30000000000000000000002 /* DemoRoom.html in Resources */,
-				B10000000000000000000021 /* TUCK_Product_Catalog - 시트1.csv in Resources */,
+				B10000000000000000000021 /* TUCK_Product_Catalog.csv in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

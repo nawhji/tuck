@@ -6,14 +6,14 @@ const REUSABLE_PI = new Set(['requires_payment_method', 'requires_confirmation',
 const ADDRESS_FIELDS = ['line1', 'city', 'state', 'postalCode', 'country'];
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
-/** 주문·결제 로직. 금액·재고·소유권 판단은 모두 여기서 서버 데이터로만 한다. */
+/** Order and payment logic. Amount, inventory, and ownership decisions use server data only. */
 export class Orders {
   constructor({ config, store, catalog, stripe }) {
     Object.assign(this, { config, store, catalog, stripe });
     this.locks = new Map();
   }
 
-  /** 같은 주문에 대한 요청을 한 번에 하나씩 처리한다. (더블 탭·재시도 경합 방지) */
+  /** Serializes requests for the same order (prevents double taps and retry races). */
   async withLock(orderId, work) {
     const previous = this.locks.get(orderId) ?? Promise.resolve();
     const run = previous.catch(() => {}).then(work);
@@ -24,7 +24,7 @@ export class Orders {
 
   // MARK: Devices
 
-  /** 로그인이 없으므로 기기마다 익명 토큰과 Stripe Customer를 만든다. 프로필(주소)은 이후 프로필 화면이 채운다. */
+  /** Without sign-in, create an anonymous token and Stripe Customer per device. The profile screen supplies the address later. */
   async registerDevice(profile) {
     const address = validateAddress(profile?.address);
     const id = `dev_${crypto.randomUUID()}`;
@@ -73,7 +73,7 @@ export class Orders {
     return { status: 'ok', orderId: order.id, quote: order.quote, alternatives: [], paymentMethod };
   }
 
-  /** 소유자가 아니면 존재 여부도 알리지 않는다. */
+  /** Do not reveal whether an order exists if the caller is not its owner. */
   ownedOrder(device, orderId) {
     const order = this.store.data.orders[orderId];
     if (!order || order.ownerId !== device.id) throw new QuoteError('order_not_found', 'Order not found.', 404);
@@ -102,7 +102,7 @@ export class Orders {
     if (order.status === 'paid') return this.view(order);
     if (order.status === 'canceled') throw new QuoteError('order_canceled', 'This order was canceled.', 409);
 
-    // 지금 시점의 신뢰 데이터로 견적을 다시 계산한다. 달라졌거나 사용자가 본 견적과 다르면 다시 확인받는다.
+    // Recalculate the quote from trusted current data. Ask for confirmation again if it changed or differs from what the user saw.
     const fresh = buildQuote({
       catalog: this.catalog, secret: this.config.quoteSecret, ownerId: device.id, productId: order.quote.product.id,
       quantity: order.quote.quantity, address: device.profile.address, budgetCents: order.quote.budgetCents,
@@ -129,7 +129,7 @@ export class Orders {
     };
   }
 
-  /** 견적이 바뀌면 이전 PaymentIntent는 버리고 주문을 다시 확인 대기로 되돌린다. */
+  /** If the quote changes, discard the old PaymentIntent and return the order to confirmation pending. */
   async replaceQuote(order, quote) {
     const stale = order.paymentIntentId;
     order.paymentIntentId = null;
@@ -140,7 +140,7 @@ export class Orders {
     if (stale) await this.stripe.cancelPaymentIntent(stale).catch(() => {});
   }
 
-  /** 주문당 시도 횟수를 멱등 키에 넣어, 같은 시도는 몇 번을 요청해도 PaymentIntent가 하나만 생기게 한다. */
+  /** Include the per-order attempt number in the idempotency key so retries of one attempt create only one PaymentIntent. */
   async paymentIntentFor(order, device) {
     if (order.paymentIntentId) {
       const existing = await this.stripe.retrievePaymentIntent(order.paymentIntentId);
@@ -170,7 +170,7 @@ export class Orders {
         try {
           await this.stripe.cancelPaymentIntent(order.paymentIntentId);
         } catch (error) {
-          // 이미 결제가 끝났으면 취소할 수 없다. 웹훅이 최종 상태를 정한다.
+          // A completed payment cannot be canceled. The webhook determines the final status.
           if (!(error instanceof StripeError)) throw error;
           const current = await this.stripe.retrievePaymentIntent(order.paymentIntentId);
           if (current.status === 'succeeded' || current.status === 'processing') {
@@ -184,7 +184,7 @@ export class Orders {
     });
   }
 
-  /** 웹훅이 아직 안 왔거나(로컬 개발 등) 유실돼도 진행되도록, 결제 대기 중인 주문은 Stripe에서 직접 조회한 상태로 확정한다. */
+  /** If a webhook has not arrived or was lost (for example, during local development), confirm pending orders using the status retrieved from Stripe. */
   async reconcile(order) {
     if (order.status !== 'awaiting_payment' || !order.paymentIntentId) return;
     await this.withLock(order.id, async () => {
@@ -204,7 +204,7 @@ export class Orders {
 
   // MARK: Webhook
 
-  /** 서명이 검증된 이벤트만 들어온다. 같은 이벤트·오래된 PaymentIntent·순서가 뒤바뀐 이벤트는 상태를 망가뜨리지 않는다. */
+  /** Only verified events arrive here. Duplicate events, stale PaymentIntents, and out-of-order events must not corrupt state. */
   applyEvent(event) {
     if (this.store.data.events[event.id]) return 'duplicate';
     this.store.data.events[event.id] = Date.now();
@@ -221,7 +221,7 @@ export class Orders {
     switch (event.type) {
       case 'payment_intent.succeeded':
         if (intent.amount !== order.quote.totalCents || intent.currency !== order.quote.currency) {
-          order.status = 'needs_review'; // 금액이 서버 견적과 다르면 성공으로 처리하지 않는다.
+          order.status = 'needs_review'; // Do not mark the order successful if the amount differs from the server quote.
           return 'amount_mismatch';
         }
         order.status = 'paid';

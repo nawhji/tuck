@@ -1,11 +1,11 @@
 import Foundation
 
-/// `data/TUCK_Product_Catalog - 시트1.csv`를 읽어 AI 시스템 프롬프트용 텍스트로 만든다.
-/// 가구 추천의 유일한 기준 dataset이다.
+/// Reads `data/TUCK_Product_Catalog.csv` and formats it for the AI system prompt.
+/// This is the source of truth for furniture recommendations.
 struct ProductCatalog {
-    static let fileName = "TUCK_Product_Catalog - 시트1"
+    static let fileName = "TUCK_Product_Catalog"
 
-    /// AI가 판단하는 데 필요한 열만 싣는다 (이미지 URL 등은 제외해 토큰을 아낀다).
+    /// Include only columns the AI needs; omit image URLs and other fields to save tokens.
     private static let promptColumns = [
         "id", "name", "brand", "category", "description", "price_cents", "currency", "availability",
         "width_in", "depth_in", "height_in", "seat_height_in", "color_name", "color_family",
@@ -18,7 +18,7 @@ struct ProductCatalog {
 
     func row(id: String) -> [String: String]? { rows.first { $0["id"] == id } }
 
-    /// `["a","b"]` 형태로 저장된 열을 배열로 푼다.
+    /// Decodes columns stored as arrays such as `["a","b"]`.
     static func list(_ value: String?) -> [String] {
         guard let data = value?.data(using: .utf8),
               let items = try? JSONDecoder().decode([String].self, from: data)
@@ -31,7 +31,7 @@ struct ProductCatalog {
         rows = Self.parse(try String(contentsOf: url, encoding: .utf8))
     }
 
-    /// 한 줄에 제품 하나인 JSON Lines. 값이 비었거나 "null"인 열은 생략한다.
+    /// Encodes one product per JSON Lines row, omitting empty or `null` fields.
     var promptText: String {
         rows.map { row in
             let fields = Self.promptColumns.compactMap { column -> String? in
@@ -48,7 +48,7 @@ struct ProductCatalog {
         return String(array.dropFirst().dropLast())
     }
 
-    /// 따옴표·줄바꿈이 들어간 필드를 처리하는 최소 CSV 파서.
+    /// Minimal CSV parser that handles quoted fields and line breaks.
     private static func parse(_ text: String) -> [[String: String]] {
         var records: [[String]] = []
         var record: [String] = []
@@ -83,7 +83,7 @@ struct ProductCatalog {
     }
 }
 
-/// AI가 고른 가구 한 개. 화면 값은 `id`로 카탈로그에서 가져온다.
+/// A furniture item selected by the AI. The UI looks up its values in the catalog by `id`.
 struct ProductPick: Equatable, Decodable {
     let id: String
     let keywords: [String]
@@ -102,16 +102,16 @@ struct ProductPick: Equatable, Decodable {
     private enum CodingKeys: String, CodingKey { case id, keywords }
 }
 
-/// 응답을 구성하는 한 덩어리. 본문, 가구 pick, 구매 의사가 번갈아 나올 수 있다.
+/// One segment of a response. Text, furniture picks, and purchase intents may alternate.
 enum ReplySegment: Equatable {
     case text(String)
     case products([ProductPick])
     case buy(BuyIntent)
 }
 
-/// 응답 원문을 본문·가구 pick·구매 의사 덩어리로 나눈다.
-/// 모델은 가구를 언급한 자리에 ```tuck-products 블록(`{"products":[{"id","keywords"}]}`)을,
-/// 사용자가 놓인 가구를 사겠다고 하면 ```tuck-buy 블록(`{"quantity":1,"budget_usd":200}`)을 넣는다.
+/// Splits the raw response into text, furniture-pick, and purchase-intent segments.
+/// The model inserts a ```tuck-products block (`{"products":[{"id","keywords"}]}`) where it mentions furniture,
+/// and a ```tuck-buy block (`{"quantity":1,"budget_usd":200}`) when the user wants to buy placed furniture.
 enum ReplyParser {
     static let fence = "```tuck-products"
     static let buyFence = "```tuck-buy"
@@ -130,11 +130,11 @@ enum ReplyParser {
         while let (start, isBuy) = earliestFence(in: rest) {
             appendText(String(rest[..<start.lowerBound]))
             let body = rest[start.upperBound...]
-            // 스트리밍 중: 블록이 아직 닫히지 않았으면 여기서 멈춘다.
+            // During streaming, stop if the block has not closed yet.
             guard let end = body.range(of: "```") else { return segments }
             let json = String(body[..<end.lowerBound])
             if isBuy {
-                // 구매 의사는 한 번만 인정한다.
+                // Accept only one purchase intent.
                 if let intent = decode(BuyIntent.self, from: json),
                    !segments.contains(where: { if case .buy = $0 { true } else { false } }) {
                     segments.append(.buy(intent))
@@ -149,7 +149,7 @@ enum ReplyParser {
         return segments
     }
 
-    /// 응답에 닫힌 구매 블록이 있으면 그 값을 돌려준다.
+    /// Returns the value from a closed purchase block in the response, if present.
     static func buyIntent(in raw: String) -> BuyIntent? {
         for case let .buy(intent) in parse(raw) { return intent }
         return nil
@@ -164,7 +164,7 @@ enum ReplyParser {
         }
     }
 
-    /// 스트리밍 중 끝에 걸린 펜스 조각("`", "```tuck-pro" 등)은 화면에 내보내지 않는다.
+    /// Hides an incomplete trailing fence (such as "`" or "```tuck-pro") while streaming.
     private static func visibleText(_ raw: String) -> String {
         let longest = [fence, buyFence].map { fence in
             stride(from: min(fence.count - 1, raw.count), through: 1, by: -1)

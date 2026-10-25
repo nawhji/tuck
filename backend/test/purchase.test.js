@@ -8,7 +8,7 @@ let t;
 before(async () => { t = await startApp(); });
 after(() => t.close());
 
-/** 견적 → 주문 확인까지 진행해 결제 직전 상태를 만든다. */
+/** Creates an order at the point immediately before payment by requesting a quote and confirming the order. */
 async function checkout(productId = 'sofa_028_brown', budgetCents = 20_000_00) {
   const token = await t.register();
   const quote = await t.call('POST', '/v1/quotes', { token, body: { productId, quantity: 1, budgetCents } });
@@ -56,7 +56,7 @@ describe('quote', () => {
       assert.ok(alt.totalCents <= 20_000, `${alt.product.id} total ${alt.totalCents}`);
       assert.equal(product.availability, 'in_stock');
     }
-    // 자리에 들어가는 대안이 먼저 나온다.
+    // Alternatives that fit the placement are listed first.
     const flags = body.alternatives.map((a) => a.fitsPlacement);
     assert.deepEqual(flags, [...flags].sort((a, b) => b - a));
     assert.ok(body.alternatives[0].fitsPlacement);
@@ -95,7 +95,7 @@ describe('payment success', () => {
     assert.match(intent.description, /^\[TEST\]/);
     assert.equal(intent.metadata.test, 'true');
 
-    // PaymentSheet이 끝났다고 해도 웹훅 전에는 paid가 아니다.
+    // Closing PaymentSheet does not mark the order paid before the webhook arrives.
     assert.equal((await t.call('GET', `/v1/orders/${c.orderId}`, { token: c.token })).body.status, 'awaiting_payment');
     intent.status = 'succeeded';
     const hook = await t.webhook('payment_intent.succeeded', { ...intent, amount_received: intent.amount });
@@ -222,7 +222,7 @@ describe('quote changes are reconfirmed', () => {
     assert.notEqual(changed.body.quote.hash, c.quote.hash);
     assert.equal(intentOf(c.orderId).length, 0, 'no payment is created for an unapproved quote');
 
-    const stillOld = await confirm(c); // 옛 견적 해시로는 계속 거부
+    const stillOld = await confirm(c); // The old quote hash must still be rejected.
     assert.equal(stillOld.status, 409);
     const approved = await t.call('POST', `/v1/orders/${c.orderId}/confirm`, { token: c.token, body: { quoteHash: changed.body.quote.hash } });
     assert.equal(approved.status, 200);

@@ -12,7 +12,7 @@ extension TuckCheckoutConfigurationProviding {
 }
 extension Secrets: TuckCheckoutConfigurationProviding {}
 
-/// 주문 백엔드(`backend/`) 클라이언트. Stripe 비밀 키는 서버에만 있고, 앱은 기기 토큰으로만 호출한다.
+/// Client for the order backend (`backend/`). The Stripe secret key stays on the server; the app uses a device token.
 actor CheckoutClient {
     enum CheckoutError: LocalizedError {
         case server(code: String, message: String)
@@ -29,10 +29,10 @@ actor CheckoutClient {
     }
 
     enum ConfirmOutcome {
-        /// PaymentSheet로 결제를 진행한다.
+        /// Continue payment with PaymentSheet.
         case pay(PaymentParams, OrderSnapshot)
         case alreadyPaid(OrderSnapshot)
-        /// 서버 가격이 바뀌어 새 견적을 다시 확인받아야 한다.
+        /// The server price changed, so the user must review the updated quote.
         case quoteChanged(OrderSnapshot)
     }
 
@@ -98,7 +98,7 @@ actor CheckoutClient {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw CheckoutError.invalidResponse }
         if http.statusCode == 401, retryingAuth {
-            // 서버가 토큰을 잊었으면(예: 테스트 서버 초기화) 한 번만 새로 등록한다.
+            // Register again once if the server has lost the token (for example, after a test-server reset).
             token = nil
             Keychain.delete(Self.tokenKey)
             return try await send(method, path, body: body, acceptedStatuses: acceptedStatuses, retryingAuth: false)
@@ -129,12 +129,12 @@ actor CheckoutClient {
     private struct Registration: Decodable { let token: String }
 }
 
-/// 프로필 화면(작업 중)이 완성되기 전까지 쓰는 기본 배송지. 결제 수단은 서버가 테스트 카드로 미리 채운다.
+/// Default shipping address used until the profile screen is complete. The server preloads a test payment method.
 struct DemoProfile: Encodable {
     let name: String
     let address: OrderAddress
 
-    /// 서버가 기기 등록 때 고객에 붙이는 테스트 카드(pm_card_visa)와 같은 값.
+    /// Matches the test card (`pm_card_visa`) attached to the customer when the server registers the device.
     static let card = CardSummary(brand: "visa", last4: "4242")
 
     static let current = DemoProfile(
@@ -143,7 +143,7 @@ struct DemoProfile: Encodable {
     )
 }
 
-/// 익명 기기 토큰 보관용 최소 Keychain 래퍼.
+/// Minimal Keychain wrapper for storing the anonymous device token.
 private enum Keychain {
     private static func query(_ key: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: "com.hackathon.tuck", kSecAttrAccount as String: key]

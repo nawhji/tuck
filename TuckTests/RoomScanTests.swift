@@ -35,7 +35,7 @@ final class RoomScanTests: XCTestCase {
             let scan = try XCTUnwrap(ScanStore.latest(in: root))
             XCTAssertEqual(scan.id, "newer")
             XCTAssertEqual(try ScanStore.all(in: root).map(\.id), ["newer", "older"])
-            XCTAssertEqual(scan.document.objects.first?.label, "화장대")
+            XCTAssertEqual(scan.document.objects.first?.label, "vanity")
             XCTAssertEqual(scan.document.objects.first?.dimensions.width, 1.0)
             XCTAssertEqual(scan.document.objects.first?.transform.count, 16)
             XCTAssertNil(scan.files.model)
@@ -567,7 +567,7 @@ final class RoomChatPersistenceTests: XCTestCase {
     func testRoomKeysCannotEscapeDirectory() throws {
         try withFolder { folder in
             let store = RoomChatStore(directory: folder)
-            let key = "saved:../../room/한글"
+            let key = "saved:../../room/é"
             try store.save([.init(role: .user, text: "Safe")], key: key)
             XCTAssertEqual(store.fileURL(for: key).deletingLastPathComponent().path, folder.path)
             XCTAssertEqual(try store.load(key).first?.rawText, "Safe")

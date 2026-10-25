@@ -87,7 +87,7 @@
       "id": "64BFD362-9502-4ADB-B9DF-127C36B8D1EF",
       "kind": "object",
       "category": "table",
-      "label": "화장대",
+      "label": "vanity",
       "confidence": "high",
       "dimensions": {
         "width": 1,

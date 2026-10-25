@@ -8,7 +8,7 @@ export class StripeError extends Error {
   }
 }
 
-/** Stripe REST 호출용 폼 인코딩: {a:{b:1}} → a[b]=1 */
+/** Form encoding for Stripe REST calls: {a:{b:1}} → a[b]=1 */
 export function encodeForm(params, prefix = '') {
   const pairs = [];
   for (const [key, value] of Object.entries(params)) {
@@ -20,7 +20,7 @@ export function encodeForm(params, prefix = '') {
   return pairs;
 }
 
-/** 외부 SDK 없이 쓰는 최소 Stripe 클라이언트. 비밀 키는 서버에서만 사용한다. */
+/** Minimal Stripe client without an external SDK. The secret key is used on the server only. */
 export class Stripe {
   constructor({ secretKey, apiBase }) {
     this.secretKey = secretKey;
@@ -55,7 +55,7 @@ export class Stripe {
   cancelPaymentIntent(id) { return this.request('POST', `/v1/payment_intents/${id}/cancel`); }
 }
 
-/** Stripe-Signature(t=…,v1=…) 검증. 원문 바디와 서명 비밀로 HMAC을 계산하고 허용 시간차를 확인한다. */
+/** Validates Stripe-Signature (t=…,v1=…). Computes HMAC from the raw body and signing secret, then checks the allowed timestamp tolerance. */
 export function verifyWebhook(rawBody, header, secret, { toleranceSeconds = 300, now = () => Date.now() / 1000 } = {}) {
   const parts = String(header ?? '').split(',').map((p) => p.trim().split('='));
   const timestamp = parts.find(([k]) => k === 't')?.[1];

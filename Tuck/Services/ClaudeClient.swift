@@ -1,6 +1,6 @@
 import Foundation
 
-/// Anthropic Messages API 스트리밍 클라이언트.
+/// Streaming client for the Anthropic Messages API.
 struct ClaudeClient {
     enum ClientError: LocalizedError {
         case http(status: Int, message: String)
@@ -102,7 +102,7 @@ struct ClaudeClient {
             """
     }
 
-    /// 응답 텍스트 조각을 도착하는 대로 흘려보낸다.
+    /// Streams each response text fragment as it arrives.
     func stream(_ turns: [Turn], roomContext: RoomChatContext? = nil) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {

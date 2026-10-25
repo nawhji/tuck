@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 사용자 말풍선 (우측 정렬, 크림색 배경).
+/// User message bubble (right-aligned with a cream background).
 struct UserBubble: View {
     let text: String
 
@@ -17,7 +17,7 @@ struct UserBubble: View {
     }
 }
 
-/// 에이전트 답변 텍스트 (말풍선 없이 본문으로 표시). `#### 제목`, **굵게**, *기울임*을 적용한다.
+/// Agent response text, shown without a bubble. Supports `#### headings`, **bold**, and *italic*.
 struct AssistantText: View {
     let text: String
 
@@ -44,7 +44,7 @@ struct AssistantText: View {
         case paragraph(String)
     }
 
-    /// `#`으로 시작하는 줄은 제목, 이어지는 나머지 줄은 한 문단으로 묶는다.
+    /// Lines starting with `#` are headings; consecutive remaining lines are grouped into paragraphs.
     static func lines(_ text: String) -> [Line] {
         var result: [Line] = []
         var paragraph: [String] = []
@@ -72,7 +72,7 @@ struct AssistantText: View {
         return line.dropFirst(hashes.count).trimmingCharacters(in: .whitespaces)
     }
 
-    /// 인라인 마크다운을 적용한다. 스트리밍 중 닫히지 않은 기호는 글자 그대로 둔다.
+    /// Applies inline Markdown. Unclosed markers are shown literally while streaming.
     static func markdown(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)

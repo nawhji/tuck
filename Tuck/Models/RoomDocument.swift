@@ -119,7 +119,7 @@ extension RoomDocument {
     /// Sample room for SwiftUI previews. Not real scan data.
     static let sample = RoomDocument(
         id: "preview-room", walls: 4, objects: [
-            ("table", SIMD3(1.0, 0.75, 0.4), SIMD3(1.2, 0.4, -0.9), "화장대"),
+            ("table", SIMD3(1.0, 0.75, 0.4), SIMD3(1.2, 0.4, -0.9), "Vanity"),
             ("bed", SIMD3(1.6, 0.5, 2.0), SIMD3(-0.8, 0.25, 0.6), nil),
             ("storage", SIMD3(0.9, 1.8, 0.4), SIMD3(2.0, 0.9, 0.5), nil)
         ]

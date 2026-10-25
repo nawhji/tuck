@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Tuck 캐릭터. 로딩 중에는 눈을 깜빡이고, 끝나면 눈을 뜬 모습을 유지한다.
+/// Tuck mascot. It blinks while loading and keeps its eyes open when loading finishes.
 struct TuckAvatar: View {
     var isLoading = false
     var size: CGFloat = 32
@@ -24,7 +24,7 @@ struct TuckAvatar: View {
     }
 }
 
-/// 답변을 기다리는 동안 보이는 캐릭터와 귀여운 문구.
+/// Mascot and playful status text shown while waiting for a response.
 struct TuckLoadingIndicator: View {
     private static let phrases = [
         "Rearranging the furniture in my head…",

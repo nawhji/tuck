@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { price, MAX_QUANTITY } from './pricing.js';
 
 const MAX_ALTERNATIVES = 3;
-const FOOTPRINT_TOLERANCE = 1.15; // 대체 상품은 원래 놓인 자리(가로·세로)의 115% 안에 들어와야 한다.
+const FOOTPRINT_TOLERANCE = 1.15; // A replacement must fit within 115% of the original product's footprint.
 
 export class QuoteError extends Error {
   constructor(code, message, status = 400) {
@@ -12,7 +12,7 @@ export class QuoteError extends Error {
   }
 }
 
-/** 견적 서명: 결제 금액과 견적 내용이 바뀌면 값이 달라진다. 클라이언트가 승인한 견적과 비교하는 데 쓴다. */
+/** Quote signature changes when the amount or quote contents change; used to compare with the quote approved by the client. */
 export function quoteHash(secret, ownerId, quote) {
   const canonical = JSON.stringify([
     ownerId, quote.product.id, quote.quantity, quote.unitCents, quote.shippingCents, quote.taxCents,
@@ -30,7 +30,7 @@ export function validateQuantity(quantity) {
   }
 }
 
-/** 상품·수량·배송지로 견적을 만든다. 가격은 전부 카탈로그에서 계산한다. */
+/** Builds a quote from the product, quantity, and shipping address. All prices come from the catalog. */
 export function buildQuote({ catalog, secret, ownerId, productId, quantity, address, budgetCents }) {
   validateQuantity(quantity);
   if (budgetCents != null && (!Number.isInteger(budgetCents) || budgetCents <= 0)) {
@@ -60,8 +60,8 @@ export function buildQuote({ catalog, secret, ownerId, productId, quantity, addr
 const overlap = (a, b) => a.filter((x) => b.includes(x)).length;
 
 /**
- * 예산 안에서 같은 종류의 대체 상품을 찾는다. 배치(자리 크기)와 스타일을 지키기 위해
- * 원래 상품의 가로·세로 안에 들어오는 상품을 먼저, 스타일 태그·색상이 겹치는 상품을 먼저 보여준다.
+ * Finds same-category alternatives within budget. To preserve fit and style,
+ * prefer products that fit within the original footprint and share style tags or colors.
  */
 export function alternatives({ catalog, product, quantity, address, budgetCents }) {
   const fits = (p) => (

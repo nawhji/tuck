@@ -1,30 +1,30 @@
 import Foundation
 import CryptoKit
 
-/// 채팅 스레드의 한 항목. 에이전트 응답이 스트리밍되며 채워진다.
+/// One item in the chat thread. Agent responses are populated as they stream.
 struct ChatMessage: Identifiable, Equatable {
     enum Role: String, Codable {
         case user
         case assistant
     }
 
-    /// 에이전트 답변의 한 덩어리. 본문과 가구 카드가 번갈아 나올 수 있다.
+    /// One segment of an agent response. Text and furniture cards may alternate.
     enum Block: Equatable {
         case text(String)
         case products([Product])
-        /// 주문 확인 카드. 스트림이 끝난 뒤 앱이 붙이며, 상태는 서버 주문 상태를 따라 바뀐다.
+        /// Order confirmation card appended by the app after streaming ends. Its status follows the server order state.
         case checkout(CheckoutCard)
     }
 
     let id: UUID
     let role: Role
-    /// 사용자 메시지 본문.
+    /// User message text.
     var text: String
-    /// 에이전트 답변 (JSON 블록은 카드로 바뀌어 있다).
+    /// Agent response (JSON blocks have been converted into cards).
     var blocks: [Block]
-    /// 답변 뒤에 앱이 붙이는 덩어리. 스트리밍 중 `blocks`를 다시 만들어도 사라지지 않는다.
+    /// Segment appended by the app after the response. It survives rebuilding `blocks` during streaming.
     var trailing: [Block] = []
-    /// 모델이 보낸 원문. 대화 이력을 다시 보낼 때 쓴다.
+    /// Raw model response, used when sending the conversation history again.
     var rawText: String
 
     init(id: UUID = UUID(), role: Role, text: String, blocks: [Block] = []) {
@@ -36,7 +36,7 @@ struct ChatMessage: Identifiable, Equatable {
     }
 }
 
-/// 추천 가구 카드에 표시되는 값. 이름·가격·브랜드·이미지·링크는 카탈로그, 키워드는 AI가 정한다.
+/// Values shown on a recommended furniture card. The catalog provides name, price, brand, image, and link; the AI provides keywords.
 struct Product: Identifiable, Equatable, Codable {
     let id: String
     var name: String
@@ -48,7 +48,7 @@ struct Product: Identifiable, Equatable, Codable {
 }
 
 extension Product {
-    /// 카탈로그 행과 AI pick으로 카드 값을 만든다. 카탈로그에 없는 id면 nil.
+    /// Builds card values from a catalog row and AI pick. Returns nil if the ID is not in the catalog.
     init?(pick: ProductPick, catalog: ProductCatalog) {
         guard let row = catalog.row(id: pick.id) else { return nil }
         let keywords = pick.keywords.isEmpty

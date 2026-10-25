@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 결제가 확정된(paid) 주문 기록. 기기에만 저장하며, 같은 주문은 한 번만 기록한다.
+/// Records confirmed (`paid`) orders on this device, once per order.
 struct OrderRecord: Codable, Identifiable, Equatable {
     let id: String
     let productName: String

@@ -33,7 +33,7 @@ export function createServer({ config, store = new Store(config.dataFile), catal
     const url = new URL(request.url, 'http://localhost');
     const raw = request.method === 'POST' ? await readBody(request) : '';
 
-    // 웹훅은 원문 바디로 서명을 검증하며, 앱 토큰 인증과 무관하다.
+    // Webhooks validate the signature against the raw body and do not use app-token authentication.
     if (request.method === 'POST' && url.pathname === '/webhooks/stripe') {
       if (!verifyWebhook(raw, request.headers['stripe-signature'], config.webhookSecret)) {
         return send(response, 400, { error: 'invalid_signature' });

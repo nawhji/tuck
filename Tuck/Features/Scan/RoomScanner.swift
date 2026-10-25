@@ -169,7 +169,7 @@ final class RoomScanner: ObservableObject {
         }
     }
 
-    /// A generic RoomPlan category can be given a useful name such as "화장대".
+    /// A generic RoomPlan category can be given a useful name such as "vanity".
     @discardableResult
     func renameObject(id: String, label: String) -> Bool {
         guard !isSaving, var updated = document,

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 하단 채팅 시트: 핸들 + 제목 + 메시지 목록 + 입력창. 높이 조절(드래그)은 부모가 담당한다.
+/// Bottom chat sheet: handle, title, message list, and input. The parent handles height changes by dragging.
 struct ChatSheet<Drag: Gesture>: View {
     let messages: [ChatMessage]
     let selectedProductID: Product.ID?
@@ -35,20 +35,20 @@ struct ChatSheet<Drag: Gesture>: View {
                                 ForEach(messages.prefix(tailStart)) { message in
                                     messageView(message).id(message.id)
                                 }
-                                // 마지막 질문과 그 답변: 높이를 재서 남는 만큼만 아래 여백으로 채운다.
+                                // Measure the last question and answer, then use only the remaining height as bottom spacing.
                                 VStack(spacing: 16) {
                                     ForEach(messages.dropFirst(tailStart)) { message in
                                         messageView(message).id(message.id)
                                     }
                                 }
                                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { tailHeight = $0 }
-                                // 답변이 짧아도 질문을 맨 위로 올릴 수 있도록, 마지막 질문 이후 내용 높이를 뺀 만큼만 여백을 둔다.
+                                // Keep only the space left after the last question so it can stay at the top even when its answer is short.
                                 Color.clear.frame(height: max(viewport.size.height - tailHeight - 16, 0))
                             }
                             .padding(.vertical, 16)
                         }
                         .scrollDismissesKeyboard(.interactively)
-                        // 질문을 보내면 그 질문이 시트 상단에 보이도록 맞추고, 스트리밍 중에는 따라가지 않는다.
+                        // After sending a question, align it at the top of the sheet and do not auto-scroll during streaming.
                         .onChange(of: messages.count) {
                             guard let question = messages.last(where: { $0.role == .user }) else { return }
                             withAnimation { scroll.scrollTo(question.id, anchor: .top) }
@@ -74,7 +74,7 @@ struct ChatSheet<Drag: Gesture>: View {
                     .shadow(color: .black.opacity(0.12), radius: 10, y: 8)
                 Color.white.padding(.top, 31)
             }
-            // 홈 인디케이터 영역까지 시트 색을 이어 붙이고, 하단 그림자를 덮는다.
+            // Extend the sheet color through the home-indicator area and cover the bottom shadow.
             .overlay(alignment: .bottom) {
                 Color.white
                     .frame(height: 120)
@@ -107,7 +107,7 @@ struct ChatSheet<Drag: Gesture>: View {
             UserBubble(text: message.text)
         case .assistant:
             VStack(alignment: .leading, spacing: 16) {
-                // 캐릭터는 본문 위 별도 줄에 둬서 텍스트 줄바꿈에 영향을 주지 않는다.
+                // Put the mascot on its own line above the response so it does not affect text wrapping.
                 Group {
                     if message.blocks.isEmpty {
                         TuckLoadingIndicator()

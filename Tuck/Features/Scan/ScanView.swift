@@ -22,9 +22,9 @@ struct ScanView: View {
         NavigationStack {
             VStack(spacing: 14) {
                 HStack {
-                    Label("벽 \(scanner.wallCount)", systemImage: "square.split.2x2")
+                    Label("Walls \(scanner.wallCount)", systemImage: "square.split.2x2")
                     Spacer()
-                    Label("가구 \(scanner.objectCount)", systemImage: "sofa")
+                    Label("Furniture \(scanner.objectCount)", systemImage: "sofa")
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -37,7 +37,7 @@ struct ScanView: View {
                         placeholder
                     }
                     if scanner.phase == .processing {
-                        ProgressView("3D 공간 정리 중…")
+                        ProgressView("Preparing 3D room…")
                             .padding(20)
                             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                     }
@@ -62,11 +62,11 @@ struct ScanView: View {
             }
             .padding()
             .background(Color(.systemBackground))
-            .navigationTitle("내 방 스캔")
+            .navigationTitle("Scan My Room")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") {
+                    Button("Close") {
                         if scanner.phase == .scanning || scanner.phase == .processing ||
                             (scanner.document != nil && scanner.files == nil) {
                             confirmsDiscard = true
@@ -78,7 +78,7 @@ struct ScanView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if scanner.phase == .ready {
-                        Button("홈에 적용") { finishAndDismiss() }
+                        Button("Use in Home") { finishAndDismiss() }
                             .disabled(scanner.isSaving || scanner.files == nil)
                     }
                 }
@@ -93,9 +93,9 @@ struct ScanView: View {
                 else { scanner.stop() }
             }
         }
-        .confirmationDialog("저장하지 않은 스캔을 종료할까요?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
-            Button("스캔 종료", role: .destructive) { finishAndDismiss() }
-            Button("계속 스캔", role: .cancel) {}
+        .confirmationDialog("Discard this scan?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
+            Button("Discard Scan", role: .destructive) { finishAndDismiss() }
+            Button("Continue Scanning", role: .cancel) {}
         }
     }
 
@@ -111,10 +111,10 @@ struct ScanView: View {
         VStack(spacing: 12) {
             Image(systemName: scanner.isSupported ? "viewfinder" : "iphone.slash")
                 .font(.system(size: 46))
-            Text(scanner.isSupported ? "벽과 가구가 함께 보이도록\n방을 천천히 둘러봐 주세요."
-                 : "RoomPlan 스캔에는 LiDAR가 있는\n아이폰 또는 아이패드가 필요해요.")
+            Text(scanner.isSupported ? "Move slowly around the room so the walls and furniture stay in view."
+                 : "RoomPlan scanning requires an iPhone or iPad with LiDAR.")
                 .multilineTextAlignment(.center)
-            Text("스캔 후 3D 공간과 치수가 저장돼요.")
+            Text("Your 3D room and measurements will be saved after scanning.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -126,36 +126,36 @@ struct ScanView: View {
         switch scanner.phase {
         case .scanning:
             Button { scanner.stop() } label: {
-                Label("스캔 완료", systemImage: "checkmark.circle.fill")
+                Label("Finish Scan", systemImage: "checkmark.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         case .processing, .permission:
-            ProgressView(scanner.phase == .permission ? "카메라 확인 중…" : "잠시만 기다려 주세요…")
+            ProgressView(scanner.phase == .permission ? "Checking camera access…" : "Please wait…")
         case .ready:
             if scanner.isSaving {
-                ProgressView("치수와 3D 파일 저장 중…")
+                ProgressView("Saving measurements and 3D model…")
             } else if scanner.files != nil {
-                Label("아이폰에 저장됨", systemImage: "checkmark.circle")
+                Label("Saved on iPhone", systemImage: "checkmark.circle")
                     .font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 if let files = scanner.files {
                     ShareLink(item: files.json) {
-                        Label("JSON 공유", systemImage: "square.and.arrow.up")
+                        Label("Share JSON", systemImage: "square.and.arrow.up")
                     }
                     if let model = files.model {
                         ShareLink(item: model) {
-                            Label("3D 공유", systemImage: "cube")
+                            Label("Share 3D Model", systemImage: "cube")
                         }
                     }
                 }
                 if !scanner.isSaving && (scanner.files == nil || scanner.files?.model == nil) {
-                    Button("저장 재시도") { scanner.save() }
+                    Button("Retry Save") { scanner.save() }
                 }
                 Spacer(minLength: 0)
-                Button("다시 스캔") {
+                Button("Scan Again") {
                     Task { await scanner.start() }
                 }
                 .disabled(scanner.isSaving)
@@ -164,12 +164,12 @@ struct ScanView: View {
             .buttonStyle(.bordered)
         case .idle, .failed:
             if scanner.phase == .failed {
-                Button("앱 설정 열기") {
+                Button("Open Settings") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
             }
             Button { Task { await scanner.start() } } label: {
-                Label("방 스캔 시작", systemImage: "camera.fill")
+                Label("Start Room Scan", systemImage: "camera.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -180,16 +180,16 @@ struct ScanView: View {
 
     private func resultList(_ document: RoomDocument) -> some View {
         VStack(spacing: 8) {
-            Picker("측정 결과", selection: $selection) {
-                Text("가구").tag(0)
-                Text("벽·구조").tag(1)
+            Picker("Measurements", selection: $selection) {
+                Text("Furniture").tag(0)
+                Text("Walls & Structure").tag(1)
             }
             .pickerStyle(.segmented)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if selection == 0 {
                         if document.objects.isEmpty {
-                            Text("인식된 가구가 없어요.").foregroundStyle(.secondary)
+                            Text("No furniture detected.").foregroundStyle(.secondary)
                         }
                         ForEach(document.objects) { object in
                             ObjectRow(object: object, disabled: scanner.isSaving) { name in
@@ -210,7 +210,7 @@ struct ScanView: View {
                 .padding(.vertical, 4)
             }
             .frame(height: 150)
-            Text("가로 × 높이 × 깊이 · 로컬 축 기준 추정치예요.")
+            Text("Width × height × depth · estimated along local axes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -242,11 +242,11 @@ private struct ObjectRow: View {
             }
             .font(.subheadline)
             HStack {
-                TextField("이름 붙이기 (예: 화장대)", text: $name)
+                TextField("Name this item (e.g. vanity)", text: $name)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.done)
                     .onSubmit { commit() }
-                Button(name == savedName ? "저장됨" : "이름 저장") { commit() }
+                Button(name == savedName ? "Saved" : "Save Name") { commit() }
                     .disabled(disabled || name == savedName)
             }
             .font(.caption)
@@ -260,15 +260,15 @@ private struct ObjectRow: View {
 }
 
 #if DEBUG
-#Preview("시작 전") {
+#Preview("Before Scan") {
     ScanView(scanner: .preview(phase: .idle))
 }
 
-#Preview("스캔 결과") {
+#Preview("Scan Result") {
     ScanView(scanner: .preview(phase: .ready, document: .sample))
 }
 
-#Preview("오류") {
-    ScanView(scanner: .preview(phase: .failed, error: "카메라 접근이 필요해요. 아이폰 설정에서 이 앱의 카메라 권한을 켜주세요."))
+#Preview("Error") {
+    ScanView(scanner: .preview(phase: .failed, error: "Camera access is required. Enable camera permission for this app in iPhone Settings."))
 }
 #endif

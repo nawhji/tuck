@@ -13,7 +13,7 @@
     <key>CFBundleVersion</key><string>1</string>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSCameraUsageDescription</key>
-    <string>방을 3D로 스캔하고 벽과 가구의 치수를 측정하기 위해 카메라를 사용합니다.</string>
+    <string>The camera is used to scan a room in 3D and measure walls and furniture.</string>
     <key>UIFileSharingEnabled</key><true/>
     <key>LSSupportsOpeningDocumentsInPlace</key><true/>
     <key>UIApplicationSceneManifest</key>

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 주문 API(`backend/`)의 응답 모델. 금액은 전부 서버가 계산한 센트 값이며 앱은 표시만 한다.
+/// Response models for the order API (`backend/`). The server calculates all amounts in cents; the app only displays them.
 struct OrderAddress: Codable, Equatable {
     var line1: String
     var line2: String?
@@ -27,7 +27,7 @@ struct CardSummary: Codable, Equatable {
     var label: String { "\(brand.capitalized) •••• \(last4)" }
 }
 
-/// 서버가 카탈로그·배송지로 계산한 견적. `hash`는 사용자가 승인한 견적이 바뀌었는지 서버가 확인하는 값이다.
+/// Quote calculated by the server from the catalog and shipping address. The server uses `hash` to detect changes to an approved quote.
 struct OrderQuote: Codable, Equatable {
     let product: QuotedProduct
     let quantity: Int
@@ -70,7 +70,7 @@ struct QuoteResponse: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         status = try container.decode(QuoteStatus.self, forKey: .status)
         orderId = try container.decodeIfPresent(String.self, forKey: .orderId)
-        // 품절 응답의 quote에는 금액·해시가 없으므로 디코딩에 실패하면 nil로 둔다.
+        // Out-of-stock responses have no amount or hash; use nil if quote decoding fails.
         quote = try? container.decodeIfPresent(OrderQuote.self, forKey: .quote)
         alternatives = (try? container.decode([QuoteAlternative].self, forKey: .alternatives)) ?? []
         paymentMethod = try? container.decodeIfPresent(CardSummary.self, forKey: .paymentMethod)
@@ -91,7 +91,7 @@ enum OrderStatus: String, Decodable {
     }
 }
 
-/// PaymentSheet을 띄우는 데 필요한 값. 카드 정보는 앱도 서버도 다루지 않고 Stripe로 직접 간다.
+/// Values required to present PaymentSheet. Card details go directly to Stripe and are never handled by the app or server.
 struct PaymentParams: Decodable, Equatable {
     let clientSecret: String
     let customerId: String
@@ -109,13 +109,13 @@ struct OrderSnapshot: Decodable {
     let payment: PaymentParams?
 }
 
-/// 채팅 안 주문 확인 카드의 값. 상태는 서버 주문 상태(웹훅 기준)를 따라 바뀐다.
+/// Values for the order confirmation card in chat. Status follows the server order state, based on webhooks.
 struct CheckoutCard: Equatable {
     enum State: Equatable {
         case ready
         case processing
         case confirming
-        /// 결제는 끝났지만 서버 웹훅 확인이 늦어지고 있다. [Check status]로 다시 확인한다.
+        /// Payment completed, but the server webhook is delayed. Check again with [Check status].
         case pending
         case paid
         case failed(String)
@@ -126,13 +126,13 @@ struct CheckoutCard: Equatable {
     var quote: OrderQuote
     var paymentMethod: CardSummary?
     var state: State = .ready
-    /// 가격이 바뀌었을 때 등, 카드 아래에 보여주는 안내.
+    /// Message displayed below the card, for example when the price changes.
     var notice: String?
 }
 
-/// 에이전트가 사용자의 구매 의사를 전달하는 값. 상품 id는 앱이 카탈로그와 서버 가격으로 다시 검증한다.
+/// Purchase intent reported by the agent. The app validates the product ID against the catalog and server price.
 struct BuyIntent: Equatable, Decodable {
-    /// 사용자가 지칭했거나 조건에 맞아 모델이 카탈로그에서 고른 상품. 없으면 방에 놓인 상품을 쓴다.
+    /// Product named by the user or selected by the model from the catalog. If absent, use the product placed in the room.
     let productID: String?
     let quantity: Int
     let budgetCents: Int?
@@ -157,7 +157,7 @@ struct BuyIntent: Equatable, Decodable {
     }
 }
 
-/// 사용자가 실수로 입력한 카드 번호는 모델과 대화 이력에 남기지 않는다. (Luhn 검사를 통과하는 13~19자리)
+/// Card numbers entered by mistake are removed before they reach the model or conversation history (13–19 digits that pass the Luhn check).
 enum CardNumberRedactor {
     static func redact(_ text: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: #"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)"#) else { return text }

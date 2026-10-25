@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** JSON 파일 하나에 저장하는 작은 저장소. 쓰기는 임시 파일 → rename으로 원자적으로 한다. */
+/** Small store backed by one JSON file. Writes are atomic: write a temporary file, then rename it. */
 export class Store {
   constructor(file) {
     this.file = file;

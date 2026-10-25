@@ -1,5 +1,5 @@
-// 앱 클라이언트 통합 검증용: 가짜 Stripe 위에서 백엔드를 띄우고, 웹훅·가격 변경을 흉내 내는 제어 포트를 연다.
-// 실행: node backend/test/dev-server.js  (표준 출력에 {"base","control"} 주소를 JSON으로 내보낸다)
+// Integration test server for the app client: runs the backend with mock Stripe and exposes a control port for webhooks and price changes.
+// Run: node backend/test/dev-server.js (prints the {"base","control"} URLs as JSON to stdout)
 import http from 'node:http';
 import { startApp } from './helpers.js';
 

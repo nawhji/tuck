@@ -3,8 +3,8 @@ import StripePaymentSheet
 #endif
 import UIKit
 
-/// Stripe PaymentSheet를 현재 화면 위에 모달로 띄운다. 카드 입력·3DS 인증은 Stripe가 처리하고,
-/// 홈 화면(3D 방 포함)은 그대로 아래에 살아 있어 상태가 유지된다.
+/// Presents Stripe PaymentSheet as a modal over the current screen. Stripe handles card entry and 3DS authentication;
+/// the Home screen (including the 3D room) stays alive underneath and keeps its state.
 @MainActor
 enum PaymentSheetPresenter {
     enum Outcome: Equatable {
@@ -13,7 +13,7 @@ enum PaymentSheetPresenter {
         case failed(String)
     }
 
-    /// 테스트 모드 결제 완료 후 3DS 등 외부 인증에서 앱으로 돌아오는 주소.
+    /// URL used to return to the app after test-mode payment or external authentication such as 3DS.
     static let returnURL = "tuck://stripe-redirect"
 
     static let unsupportedMessage = "Payments are not supported on this device."

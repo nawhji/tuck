@@ -1,12 +1,12 @@
 import Foundation
 
-/// 채팅 안 구매 흐름: 견적 → (예산 초과 시 대안) → 주문 확인 카드 → [Order] → PaymentSheet → 서버(웹훅) 확정 → 결과 안내.
-/// 새 메시지를 만들지 않고 구매를 요청한 답변 뒤에 덩어리를 붙여, 채팅 스크롤과 3D 방 상태를 건드리지 않는다.
+/// In-chat purchase flow: quote → (alternatives if over budget) → order confirmation card → [Order] → PaymentSheet → server/webhook confirmation → result.
+/// Appends a segment to the answer that requested the purchase instead of creating a message, preserving chat scroll and 3D room state.
 extension HomeViewModel {
     // MARK: - Quote
 
-    /// 에이전트가 구매 의사를 전달하면 호출된다. 상품은 사용자가 지칭했거나 조건에 맞아 모델이 고른 것이고,
-    /// 지정이 없으면 방에 놓인(선택된) 상품이다. Try를 누르지 않아도 된다.
+    /// Called when the agent reports purchase intent. The product is named by the user or selected by the model to match their criteria;
+    /// if unspecified, use the product placed/selected in the room. The user does not need to tap Try.
     @MainActor
     func startCheckout(for placedID: Product.ID?, intent: BuyIntent, attachingTo messageID: ChatMessage.ID) async {
         guard !Task.isCancelled else { return }
@@ -79,7 +79,7 @@ extension HomeViewModel {
 
     // MARK: - Order
 
-    /// [Order] 탭. 상태를 먼저 `.processing`으로 바꿔 더블 탭이 두 번째 요청을 만들지 못하게 한다.
+    /// Handles [Order]. Set the state to `.processing` first so a double tap cannot start a second request.
     @MainActor
     func placeOrder(_ tapped: CheckoutCard) {
         guard let card = card(orderID: tapped.orderID) else { return }
@@ -118,7 +118,7 @@ extension HomeViewModel {
         do {
             switch try await checkout.confirm(orderID: orderID, quoteHash: hash) {
             case .quoteChanged(let snapshot):
-                // 사용자가 보지 못한 금액은 결제하지 않는다. 새 견적을 보여주고 다시 [Order]를 받는다.
+                // Never charge an amount the user has not seen. Show the updated quote and require [Order] again.
                 let old = card(orderID: orderID)?.quote
                 update(orderID: orderID) {
                     $0.quote = snapshot.quote
@@ -141,11 +141,11 @@ extension HomeViewModel {
     private func present(_ params: PaymentParams, orderID: String) async {
         switch await PaymentSheetPresenter.present(params) {
         case .completed:
-            // 시트 결과는 신뢰하지 않는다. 서버가 서명된 웹훅으로 확정한 상태를 기다린다.
+            // Do not trust the sheet result. Wait for the server to confirm the status with a signed webhook.
             update(orderID: orderID) { $0.state = .confirming }
             await settle(orderID: orderID)
         case .canceled:
-            // 거절 후 시트를 닫은 경우는 취소가 아니라 결제 실패로 안내한다.
+            // If the sheet closes after a decline, report a payment failure rather than cancellation.
             if let snapshot = try? await checkout.order(id: orderID), snapshot.status == .paymentFailed {
                 fail(orderID: orderID, message: snapshot.failure?.message ?? "Your payment was declined.")
                 return
@@ -166,13 +166,13 @@ extension HomeViewModel {
                          orderID: orderID)
             }
         } catch {
-            // 이미 결제가 진행 중이면 취소하지 않고 서버 상태를 따라간다.
+            // If payment is already in progress, do not cancel it; follow the server status.
             update(orderID: orderID) { $0.state = .confirming }
             await settle(orderID: orderID)
         }
     }
 
-    /// 서버가 웹훅으로 최종 상태를 확정할 때까지 기다린다.
+    /// Waits for the server to confirm the final status through a webhook.
     @MainActor
     private func settle(orderID: String) async {
         for _ in 0..<30 {
@@ -225,7 +225,7 @@ extension HomeViewModel {
 
     // MARK: - Chat plumbing
 
-    /// 구매 요청에 대한 답변 뒤에 덩어리를 붙인다. 모델이 다음 턴에 상태를 알 수 있도록 원문에 짧은 메모도 남긴다.
+    /// Appends a segment to the answer for a purchase request. Also adds a brief note to the raw response so the model knows the status on the next turn.
     @MainActor
     private func attach(_ blocks: [ChatMessage.Block], note: String? = nil, to id: ChatMessage.ID) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }

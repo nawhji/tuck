@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-/** 따옴표·줄바꿈이 들어간 필드를 처리하는 최소 CSV 파서. */
+/** Minimal CSV parser that handles quoted fields and line breaks. */
 export function parseCSV(text) {
   const records = [];
   let record = [];
@@ -28,7 +28,7 @@ export function parseCSV(text) {
 const list = (value) => { try { const v = JSON.parse(value); return Array.isArray(v) ? v : []; } catch { return []; } };
 const num = (value) => (value && value !== 'null' && Number.isFinite(Number(value)) ? Number(value) : null);
 
-/** 카탈로그 한 행을 서버가 신뢰하는 상품 값으로 바꾼다. */
+/** Converts a catalog row into trusted product values for the server. */
 function toProduct(row) {
   return {
     id: row.id,

@@ -40,7 +40,7 @@ final class RoomScanner: ObservableObject {
             permitted = false
         }
         guard permitted else {
-            errorMessage = "카메라 접근이 필요해요. 아이폰 설정에서 이 앱의 카메라 권한을 켜주세요."
+            errorMessage = "Camera access is required. Enable camera permission for this app in iPhone Settings."
             phase = .failed
             return
         }
@@ -82,7 +82,7 @@ final class RoomScanner: ObservableObject {
     func receive(_ room: CapturedRoom, token: UUID) {
         guard token == scanID, phase == .scanning || phase == .processing else { return }
         guard !room.walls.isEmpty || !room.objects.isEmpty else {
-            fail("인식된 벽이나 가구가 없어요. 벽과 바닥이 함께 보이도록 다시 스캔해주세요.", token: token)
+            fail("No walls or furniture were detected. Scan again with both walls and the floor in view.", token: token)
             return
         }
         capturedRoom = room
@@ -109,19 +109,19 @@ final class RoomScanner: ObservableObject {
                 self.isSaving = false
             } catch {
                 guard let self, self.scanID == token else { return }
-                self.saveMessage = "파일 저장에 실패했어요: \(error.localizedDescription)"
+                self.saveMessage = "Failed to save files: \(error.localizedDescription)"
                 self.isSaving = false
             }
         }
     }
 
-    /// A generic RoomPlan category can be given a useful name such as "화장대".
+    /// A generic RoomPlan category can be given a useful name such as "vanity".
     @discardableResult
     func renameObject(id: String, label: String) -> Bool {
         guard !isSaving, var updated = document,
               let index = updated.objects.firstIndex(where: { $0.id == id }) else { return false }
         guard let files else {
-            saveMessage = "이름을 저장하기 전에 파일 저장을 다시 시도해주세요."
+            saveMessage = "Retry saving the files before saving this name."
             return false
         }
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,7 +131,7 @@ final class RoomScanner: ObservableObject {
             document = updated
             return true
         } catch {
-            saveMessage = "이름 변경을 파일에 저장하지 못했어요: \(error.localizedDescription)"
+            saveMessage = "Failed to save the updated name: \(error.localizedDescription)"
             return false
         }
     }

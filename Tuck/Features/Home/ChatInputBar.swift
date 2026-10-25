@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 채팅 입력창. 비어 있고 포커스가 없을 때는 한 줄, 입력 중에는 추가 입력 공간이 있는 확장 형태.
+/// Chat input. It is one line when empty and unfocused, and expands to provide more space while typing.
 struct ChatInputBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding
@@ -12,7 +12,7 @@ struct ChatInputBar: View {
     private var isActive: Bool { isFocused.wrappedValue || !text.isEmpty }
 
     var body: some View {
-        // 필드는 항상 같은 위치에 둔다. 레이아웃 분기로 TextField가 새로 만들어지면 포커스를 잃는다.
+        // Keep the field in the same position. Recreating the TextField in a layout branch would lose focus.
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 field
@@ -33,7 +33,7 @@ struct ChatInputBar: View {
                 .strokeBorder(Color("GrayScale100"), lineWidth: 1)
         }
         .padding(.horizontal, 11)
-        // 필드 글자 영역뿐 아니라 입력창 어디를 눌러도 포커스가 잡히게 한다.
+        // Make the whole input area focus the field, not just the text region.
         .contentShape(.rect)
         .onTapGesture { isFocused.wrappedValue = true }
         .animation(.easeOut(duration: 0.2), value: isActive)
@@ -48,7 +48,7 @@ struct ChatInputBar: View {
     }
 
     private var sendButton: some View {
-        // .disabled 를 쓰면 비활성 버튼이 탭을 삼켜 입력창 포커스가 안 잡힌다.
+        // `.disabled` makes the inactive button consume taps and prevents the input field from receiving focus.
         Button {
             if isResponding { onStop() }
             else if canSend { onSend() }

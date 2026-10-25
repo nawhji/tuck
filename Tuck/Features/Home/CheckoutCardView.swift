@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 채팅 안 주문 확인 카드. 상품·수량·합계·배송지·결제 수단을 보여주고 [Order] 한 번으로 결제 시트를 연다.
-/// 모든 금액은 서버가 계산한 견적이며, 테스트 모드임을 항상 표시한다.
+/// In-chat order confirmation card. Shows product, quantity, total, shipping address, and payment method; [Order] opens the payment sheet.
+/// All amounts come from the server quote, and test mode is always indicated.
 struct CheckoutCardView: View {
     let card: CheckoutCard
     let onOrder: () -> Void

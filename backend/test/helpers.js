@@ -8,7 +8,7 @@ import { signWebhook } from '../src/stripe.js';
 export const WEBHOOK_SECRET = 'whsec_test_secret';
 export const ADDRESS = { line1: '1 Market St', city: 'San Francisco', state: 'CA', postalCode: '94105', country: 'US' };
 
-/** Stripe API 흉내: 고객·카드·PaymentIntent·멱등 키만 구현한다. */
+/** Stripe API mock implementing only customers, cards, PaymentIntents, and idempotency keys. */
 export async function startFakeStripe() {
   const state = { customers: [], intents: new Map(), idempotent: new Map(), calls: [], seq: 0 };
   const server = http.createServer(async (req, res) => {

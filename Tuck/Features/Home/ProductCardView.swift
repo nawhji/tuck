@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 추천 가구 카드. 이미지 위에 하트(우측 상단)와 이동 아이콘(우측 하단)을 겹쳐 두고,
-/// 좌측 하단 버튼으로 선택(Try)/해제(Remove)한다. 이동 아이콘은 제품 페이지(source_url)를 연다.
+/// Recommended furniture card. The favorite button overlays the image at top right, and the link button at bottom right.
+/// The bottom-left button toggles Try/Remove. The link button opens the product page (`source_url`).
 struct ProductCardView: View {
     let product: Product
     let isSelected: Bool
@@ -92,9 +92,9 @@ struct ProductCardView: View {
     }
 }
 
-/// 원본 비율 그대로 영역 안에 맞춰 보여주는 원격 이미지.
-/// `AsyncImage`는 `LazyVStack`에서 뷰가 다시 만들어질 때 요청이 취소된 채 실패 상태로 남을 수 있어,
-/// 취소되면 다시 불러오고 한 번 받은 이미지는 캐시하는 로더를 쓴다.
+/// Remote image fitted to its container without changing its aspect ratio.
+/// In a `LazyVStack`, `AsyncImage` can remain in a failed state after a request is cancelled when a view is rebuilt.
+/// This loader retries cancelled requests and caches images after the first successful load.
 struct RemoteImage: View {
     let url: URL?
     @State private var image: UIImage?

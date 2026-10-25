@@ -37,7 +37,7 @@ enum RoomExporter {
             try room.export(to: modelURL, exportOptions: .parametric)
             model = modelURL
         } catch {
-            warning = "치수 JSON은 저장했지만 3D 파일 내보내기에 실패했어요: \(error.localizedDescription)"
+            warning = "Measurements were saved as JSON, but exporting the 3D model failed: \(error.localizedDescription)"
         }
         return ScanFiles(directory: directory, json: json, nativeJSON: nativeJSON,
                          model: model, modelWarning: warning)

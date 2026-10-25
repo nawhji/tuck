@@ -1,6 +1,6 @@
 #!/bin/zsh
-# 앱의 구매 흐름 코드(CheckoutClient·모델·ReplyParser)를 backend 개발 서버(가짜 Stripe)에 붙여 검증한다.
-# 사용: scripts/test-checkout.sh
+# Test the app purchase flow (CheckoutClient, models, ReplyParser) against the backend development server (mock Stripe).
+# Usage: scripts/test-checkout.sh
 set -e
 cd "${0:A:h}/.."
 out=$(mktemp -d)
